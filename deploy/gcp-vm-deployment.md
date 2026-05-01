@@ -199,7 +199,136 @@ git pull origin main
 sudo systemctl restart aapin-heritage
 ```
 
-## 11. Permission Model
+## 11. No Sudo Or Admin Permission
+
+If you do not have `root` or `sudo` access on the VM, you cannot:
+
+- Install packages with `apt`
+- Create a system-level `systemd` service in `/etc/systemd/system`
+- Configure Nginx in `/etc/nginx`
+- Bind directly to privileged ports like `80` or `443`
+
+You can still run the app from your home directory as a user process.
+
+### Clone To A User-Owned Folder
+
+```bash
+cd ~
+git clone https://github.com/xiaoyanzhuo/heritage-meets-innovations-ai.git
+cd heritage-meets-innovations-ai
+mkdir -p logs
+```
+
+If `python3` is already installed, no extra Python packages are needed.
+
+### Choose A Non-System Port
+
+Use a port above `1024`, such as:
+
+- `8080`
+- `8501`
+- `8888`
+- `9000`
+
+Example using `8501`:
+
+```bash
+AAPIN_ADMIN_KEY='choose-a-private-admin-key' HOST=0.0.0.0 PORT=8501 python3 server.py
+```
+
+Members would access:
+
+```text
+http://YOUR_VM_IP:8501/
+```
+
+The GCP firewall must allow the selected port. If you cannot change firewall rules, ask the VM/cloud admin to allow the port or proxy traffic to your app.
+
+### Keep It Running With Nohup
+
+```bash
+cd ~/heritage-meets-innovations-ai
+mkdir -p logs
+
+AAPIN_ADMIN_KEY='choose-a-private-admin-key' HOST=0.0.0.0 PORT=8501 \
+nohup python3 server.py > logs/aapin-heritage.log 2>&1 &
+```
+
+Check it:
+
+```bash
+curl http://127.0.0.1:8501/
+tail -f logs/aapin-heritage.log
+```
+
+Stop it:
+
+```bash
+pkill -f "python3 server.py"
+```
+
+### Keep It Running With Tmux
+
+If `tmux` is available:
+
+```bash
+tmux new -s aapin
+```
+
+Inside the tmux session:
+
+```bash
+cd ~/heritage-meets-innovations-ai
+AAPIN_ADMIN_KEY='choose-a-private-admin-key' HOST=0.0.0.0 PORT=8501 python3 server.py
+```
+
+Detach without stopping the app:
+
+```text
+Ctrl+B
+D
+```
+
+Reconnect:
+
+```bash
+tmux attach -t aapin
+```
+
+### Ask Admin Team For A Reverse Proxy
+
+For a cleaner internal URL, ask the VM or platform admin to proxy a standard internal site URL to your user process.
+
+Example request:
+
+```text
+Please proxy https://YOUR_INTERNAL_SITE/ to http://127.0.0.1:8501/ on this VM.
+The app is a Python HTTP server run by my user account.
+Uploads are limited to 8 MB by the app; 10 MB proxy limit is enough.
+```
+
+If they use Nginx, the proxy block is the same as the earlier Nginx section, except `proxy_pass` should point to your chosen port:
+
+```nginx
+location / {
+    proxy_pass http://127.0.0.1:8501;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+}
+```
+
+### No-Sudo Tradeoffs
+
+This mode is good for testing or small internal usage, but it has tradeoffs:
+
+- The app may stop if the VM reboots.
+- Port `80/443` and HTTPS usually need admin support.
+- Firewall rules may require cloud admin support.
+- A user process is less robust than a managed `systemd` service.
+
+For a live ERG event, ask for either `systemd` setup or an admin-managed reverse proxy once the app is ready.
+
+## 12. Permission Model
 
 - Each member browser receives a contributor ID stored in `localStorage`.
 - Members can edit or soft-delete only submissions created from that browser.
