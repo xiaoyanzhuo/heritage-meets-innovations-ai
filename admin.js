@@ -7,6 +7,7 @@ const template = document.querySelector("#adminItemTemplate");
 const adminEditForm = document.querySelector("#adminEditForm");
 const adminEditTitle = document.querySelector("#adminEditTitle");
 const adminCancelEditButton = document.querySelector("#adminCancelEditButton");
+const adminLogoutButton = document.querySelector("#adminLogoutButton");
 
 let adminKey = "";
 let liveRows = [];
@@ -16,6 +17,7 @@ adminForm.addEventListener("submit", async (event) => {
   adminKey = new FormData(adminForm).get("adminKey").trim();
   if (!adminKey) return;
   await loadAdminData();
+  adminLogoutButton.classList.remove("is-hidden");
 });
 
 adminEditForm.addEventListener("submit", async (event) => {
@@ -24,6 +26,7 @@ adminEditForm.addEventListener("submit", async (event) => {
 });
 
 adminCancelEditButton.addEventListener("click", closeAdminEdit);
+adminLogoutButton.addEventListener("click", logoutAdmin);
 
 async function loadAdminData() {
   await Promise.all([loadLiveItems(), loadDeletedItems()]);
@@ -136,6 +139,18 @@ function openAdminEdit(table, id) {
 function closeAdminEdit() {
   adminEditForm.reset();
   adminEditForm.classList.add("is-hidden");
+}
+
+function logoutAdmin() {
+  adminKey = "";
+  liveRows = [];
+  adminForm.reset();
+  closeAdminEdit();
+  liveAdminList.innerHTML = "";
+  adminList.innerHTML = "";
+  liveAdminEmpty.classList.remove("is-visible");
+  adminEmpty.classList.remove("is-visible");
+  adminLogoutButton.classList.add("is-hidden");
 }
 
 async function saveAdminEdit() {
