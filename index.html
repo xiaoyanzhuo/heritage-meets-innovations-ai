@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>AAPI AI Community Idea Wall</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="shell">
+      <nav class="site-nav" aria-label="Event pages">
+        <a class="site-nav__link" href="heritage-showcase-v2.html">Heritage Showcase</a>
+        <a class="site-nav__link is-active" href="index.html">Idea Wall</a>
+      </nav>
+
+      <section class="hero" aria-labelledby="page-title">
+        <div class="hero__media">
+          <img src="assets/ai-community-ideas-wall.png" alt="AI for Community Ideas Wall poster with AAPI cultural artwork">
+        </div>
+        <div class="hero__content">
+          <p class="eyebrow">AAPIN Presents</p>
+          <h1 id="page-title">AI for Community Idea Wall</h1>
+          <p class="lede">Share practical, culture-rooted ideas for how AI can help our communities learn, connect, preserve heritage, and support one another.</p>
+          <div class="hero__stats" aria-label="Idea wall summary">
+            <span><strong id="ideaCount">0</strong> ideas</span>
+            <span><strong id="voteCount">0</strong> votes</span>
+            <span><strong id="impactCount">0</strong> impact areas</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="workspace" aria-label="Idea submission and wall">
+        <form class="panel submit-panel" id="ideaForm">
+          <div class="section-heading">
+            <p class="eyebrow">Submit an idea</p>
+            <h2>How can AI help our communities?</h2>
+          </div>
+
+          <label>
+            Idea title
+            <input id="title" name="title" type="text" maxlength="72" placeholder="Example: Heritage language story helper" required>
+          </label>
+
+          <label>
+            Your idea
+            <textarea id="description" name="description" maxlength="340" placeholder="Describe the community need, who it helps, and what AI could do." required></textarea>
+          </label>
+
+          <div class="form-grid">
+            <label>
+              Impact area
+              <select id="category" name="category" required>
+                <option value="Culture & Heritage">Culture & Heritage</option>
+                <option value="Education">Education</option>
+                <option value="Community Care">Community Care</option>
+                <option value="Small Business">Small Business</option>
+                <option value="Access & Language">Access & Language</option>
+              </select>
+            </label>
+
+            <label>
+              Submitted by
+              <input id="author" name="author" type="text" maxlength="40" placeholder="Name, team, or anonymous">
+            </label>
+          </div>
+
+          <fieldset>
+            <legend>Stage</legend>
+            <div class="segmented" role="radiogroup" aria-label="Idea stage">
+              <label><input type="radio" name="stage" value="Spark" checked><span>Spark</span></label>
+              <label><input type="radio" name="stage" value="Ready to test"><span>Ready</span></label>
+              <label><input type="radio" name="stage" value="Needs partners"><span>Partners</span></label>
+            </div>
+          </fieldset>
+
+          <button class="primary-action" type="submit">
+            <span aria-hidden="true">+</span>
+            Add to wall
+          </button>
+        </form>
+
+        <section class="wall" aria-labelledby="wall-title">
+          <div class="wall__toolbar">
+            <div class="section-heading">
+              <p class="eyebrow">Live wall</p>
+              <h2 id="wall-title">Community ideas</h2>
+            </div>
+            <div class="toolbar-actions">
+              <button class="icon-button" id="exportButton" type="button" aria-label="Export ideas as CSV" title="Export ideas as CSV">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 19h14"></path></svg>
+              </button>
+              <button class="icon-button" id="clearButton" type="button" aria-label="Clear local ideas" title="Clear local ideas">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6m4-6v6M8 7l1-3h6l1 3m-9 0 1 13h8l1-13"></path></svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="filters" id="filters" aria-label="Filter ideas">
+            <button class="filter is-active" data-filter="All" type="button">All</button>
+            <button class="filter" data-filter="Culture & Heritage" type="button">Culture</button>
+            <button class="filter" data-filter="Education" type="button">Education</button>
+            <button class="filter" data-filter="Community Care" type="button">Care</button>
+            <button class="filter" data-filter="Small Business" type="button">Business</button>
+            <button class="filter" data-filter="Access & Language" type="button">Language</button>
+          </div>
+
+          <aside class="favorites-shelf" aria-labelledby="favorites-title">
+            <div>
+              <p class="eyebrow">Saved by you</p>
+              <h3 id="favorites-title">My saved ideas</h3>
+            </div>
+            <div class="favorite-list" id="favoritesList"></div>
+            <p class="favorite-empty" id="favoritesEmpty">Tap the pin on ideas you want to revisit.</p>
+          </aside>
+
+          <div class="idea-grid" id="ideaGrid" aria-live="polite"></div>
+          <p class="empty-state" id="emptyState">No ideas in this view yet. Add the first one and make the wall feel alive.</p>
+        </section>
+      </section>
+    </main>
+
+    <template id="ideaTemplate">
+      <article class="idea-card">
+        <div class="idea-card__top">
+          <span class="tag"></span>
+          <button class="pin-button" type="button" aria-label="Save idea" title="Save idea">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4 20 9l-4 1-4 7-2-2 7-4 1-4-5-5zM9 15l-5 5"></path></svg>
+          </button>
+        </div>
+        <h3></h3>
+        <p class="idea-copy"></p>
+        <div class="idea-meta">
+          <span class="author"></span>
+          <span class="stage"></span>
+        </div>
+        <div class="idea-actions">
+          <button class="vote-button" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-4.4-9.3-9A5.2 5.2 0 0 1 12 6a5.2 5.2 0 0 1 9.3 6c-2.3 4.6-9.3 9-9.3 9z"></path></svg>
+            <span></span>
+          </button>
+          <button class="delete-button" type="button" aria-label="Remove idea" title="Remove idea">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6m4-6v6M8 7l1-3h6l1 3m-9 0 1 13h8l1-13"></path></svg>
+          </button>
+        </div>
+      </article>
+    </template>
+
+    <script src="app.js"></script>
+  </body>
+</html>
