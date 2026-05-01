@@ -14,10 +14,15 @@
 }
 
 .mode-options,
-.result-options,
 .connection-options {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.result-options {
+  display: grid;
+  grid-template-columns: 1fr;
   gap: 8px;
 }
 
@@ -40,7 +45,6 @@
 }
 
 .mode-options span,
-.result-options span,
 .connection-options span {
   display: grid;
   min-height: 40px;
@@ -53,12 +57,51 @@
   font-weight: 850;
 }
 
+.result-options span {
+  display: grid;
+  gap: 3px;
+  min-height: 58px;
+  align-content: center;
+  border: 1px solid rgba(16, 34, 74, 0.16);
+  border-radius: 8px;
+  color: #26385b;
+  background: #fffdf8;
+  padding: 9px 11px;
+}
+
+.result-options strong,
+.result-options small {
+  display: block;
+  line-height: 1.2;
+}
+
+.result-options strong {
+  font-size: 0.88rem;
+  font-weight: 850;
+}
+
+.result-options small {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
 .mode-options input:checked + span,
-.result-options input:checked + span,
 .connection-options input:checked + span {
   color: #fff;
   border-color: var(--plum);
   background: var(--plum);
+}
+
+.result-options input:checked + span {
+  color: var(--ink);
+  border-color: rgba(111, 44, 143, 0.5);
+  background: rgba(111, 44, 143, 0.08);
+  box-shadow: inset 4px 0 0 var(--plum);
+}
+
+.result-options input:checked + span small {
+  color: #4a3e5f;
 }
 
 .mode-panel {
