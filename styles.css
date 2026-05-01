@@ -484,12 +484,28 @@ svg {
   gap: 14px;
 }
 
+.admin-board {
+  display: grid;
+  gap: 18px;
+}
+
 .admin-card {
   min-height: auto;
 }
 
-.recover-button {
+.recover-button,
+.remove-button {
   width: 100%;
+}
+
+.admin-card .idea-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.admin-divider {
+  height: 1px;
+  background: rgba(16, 34, 74, 0.12);
 }
 
 .idea-card {

@@ -32,10 +32,21 @@
             Admin key
             <input name="adminKey" type="password" placeholder="Enter admin key" required>
           </label>
-          <button class="primary-action" type="submit">Load deleted items</button>
+          <button class="primary-action" type="submit">Load moderation tools</button>
         </form>
 
-        <section class="wall" aria-labelledby="deleted-title">
+        <section class="wall admin-board" aria-labelledby="moderation-title">
+          <div class="wall__toolbar">
+            <div class="section-heading">
+              <p class="eyebrow">Live moderation</p>
+              <h2 id="moderation-title">Public submissions</h2>
+            </div>
+          </div>
+          <div class="admin-list" id="liveAdminList"></div>
+          <p class="empty-state" id="liveAdminEmpty">No public submissions found.</p>
+
+          <div class="admin-divider"></div>
+
           <div class="wall__toolbar">
             <div class="section-heading">
               <p class="eyebrow">Soft-deleted records</p>
@@ -62,6 +73,7 @@
         </div>
         <div class="idea-actions">
           <button class="primary-action recover-button" type="button">Recover</button>
+          <button class="secondary-action remove-button is-hidden" type="button">Remove from public view</button>
         </div>
       </article>
     </template>
