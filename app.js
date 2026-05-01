@@ -1,4 +1,5 @@
 const FAVORITES_KEY = "aapi-ai-idea-wall-favorites";
+const CLIENT_KEY = "aapi-ai-contributor-id";
 const API_BASE = window.location.protocol === "file:" ? "" : "/api";
 
 const seedIdeas = [
@@ -39,6 +40,7 @@ const seedIdeas = [
 
 let ideas = [];
 let activeFilter = "All";
+let editingId = null;
 let favoriteIds = loadFavorites();
 
 const form = document.querySelector("#ideaForm");
@@ -53,6 +55,8 @@ const exportButton = document.querySelector("#exportButton");
 const clearButton = document.querySelector("#clearButton");
 const favoritesList = document.querySelector("#favoritesList");
 const favoritesEmpty = document.querySelector("#favoritesEmpty");
+const ideaSubmitLabel = document.querySelector("#ideaSubmitLabel");
+const ideaCancelEditButton = document.querySelector("#ideaCancelEditButton");
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -65,15 +69,17 @@ form.addEventListener("submit", async (event) => {
     stage: formData.get("stage")
   };
 
+  const method = editingId ? "PATCH" : "POST";
+  const path = editingId ? `/ideas/${editingId}` : "/ideas";
+
   try {
-    await apiRequest("/ideas", {
-      method: "POST",
+    await apiRequest(path, {
+      method,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(idea)
     });
     ideas = await loadIdeas();
-    form.reset();
-    form.querySelector('input[name="stage"][value="Spark"]').checked = true;
+    resetFormState();
     activeFilter = "All";
     updateFilterButtons();
     render();
@@ -81,6 +87,8 @@ form.addEventListener("submit", async (event) => {
     window.alert(error.message);
   }
 });
+
+ideaCancelEditButton.addEventListener("click", resetFormState);
 
 filters.addEventListener("click", (event) => {
   const button = event.target.closest("[data-filter]");
@@ -102,10 +110,10 @@ exportButton.addEventListener("click", () => {
 });
 
 clearButton.addEventListener("click", async () => {
-  const shouldClear = window.confirm("Restore the shared idea wall to starter examples? This affects everyone using the live site.");
-  if (!shouldClear) return;
+  const adminKey = window.prompt("Admin key required to restore the shared idea wall.");
+  if (!adminKey) return;
   try {
-    ideas = await apiRequest("/ideas/reset", { method: "POST" });
+    ideas = await apiRequest("/ideas/reset", { method: "POST", adminKey });
     activeFilter = "All";
     updateFilterButtons();
     render();
@@ -126,7 +134,11 @@ async function loadIdeas() {
 }
 
 async function apiRequest(path, options = {}) {
-  const response = await fetch(`${API_BASE}${path}`, options);
+  const { adminKey, ...fetchOptions } = options;
+  const headers = new Headers(fetchOptions.headers || {});
+  headers.set("X-AAPIN-Client", getClientId());
+  if (adminKey) headers.set("X-AAPIN-Admin-Key", adminKey);
+  const response = await fetch(`${API_BASE}${path}`, { ...fetchOptions, headers });
   if (!response.ok) {
     let message = "The live idea wall could not complete that request.";
     try {
@@ -139,6 +151,15 @@ async function apiRequest(path, options = {}) {
   }
   if (response.status === 204) return null;
   return response.json();
+}
+
+function getClientId() {
+  let clientId = localStorage.getItem(CLIENT_KEY);
+  if (!clientId) {
+    clientId = crypto.randomUUID();
+    localStorage.setItem(CLIENT_KEY, clientId);
+  }
+  return clientId;
 }
 
 function loadFavorites() {
@@ -179,7 +200,12 @@ function render() {
     pinButton.addEventListener("click", () => toggleFavorite(idea.id));
 
     voteButton.addEventListener("click", () => voteIdea(idea.id));
-    card.querySelector(".delete-button").addEventListener("click", () => deleteIdea(idea.id));
+    const editButton = card.querySelector(".edit-button");
+    const deleteButton = card.querySelector(".delete-button");
+    editButton.classList.toggle("is-hidden", !idea.canEdit);
+    deleteButton.classList.toggle("is-hidden", !idea.canEdit);
+    editButton.addEventListener("click", () => startEdit(idea.id));
+    deleteButton.addEventListener("click", () => deleteIdea(idea.id));
 
     grid.append(card);
   });
@@ -187,6 +213,28 @@ function render() {
   emptyState.classList.toggle("is-visible", visibleIdeas.length === 0);
   updateStats();
   renderFavorites();
+}
+
+function startEdit(id) {
+  const idea = ideas.find((entry) => entry.id === id);
+  if (!idea || !idea.canEdit) return;
+  editingId = id;
+  form.elements.namedItem("title").value = idea.title;
+  form.elements.namedItem("description").value = idea.description;
+  form.elements.namedItem("category").value = idea.category;
+  form.elements.namedItem("author").value = idea.author;
+  form.querySelector(`input[name="stage"][value="${idea.stage}"]`).checked = true;
+  ideaSubmitLabel.textContent = "Update idea";
+  ideaCancelEditButton.classList.remove("is-hidden");
+  form.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function resetFormState() {
+  editingId = null;
+  form.reset();
+  form.querySelector('input[name="stage"][value="Spark"]').checked = true;
+  ideaSubmitLabel.textContent = "Add to wall";
+  ideaCancelEditButton.classList.add("is-hidden");
 }
 
 async function voteIdea(id) {
@@ -200,7 +248,7 @@ async function voteIdea(id) {
 }
 
 async function deleteIdea(id) {
-  const shouldDelete = window.confirm("Remove this idea from the shared wall?");
+  const shouldDelete = window.confirm("Move this idea out of the shared wall? An admin can recover it if needed.");
   if (!shouldDelete) return;
   try {
     await apiRequest(`/ideas/${id}`, { method: "DELETE" });

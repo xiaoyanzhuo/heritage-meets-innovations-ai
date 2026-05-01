@@ -1,4 +1,5 @@
 const FAVORITES_KEY = "aapi-ai-heritage-showcase-favorites";
+const CLIENT_KEY = "aapi-ai-contributor-id";
 const API_BASE = window.location.protocol === "file:" ? "" : "/api";
 const AI_CONNECTIONS = ["Translate", "Explain", "AI Image"];
 const SHARE_TYPES = new Set(["No AI Please", "Needs AI Help", "AI-Assisted Result"]);
@@ -156,10 +157,10 @@ exportButton.addEventListener("click", () => {
 });
 
 clearButton.addEventListener("click", async () => {
-  const shouldClear = window.confirm("Restore the shared showcase to starter examples? This affects everyone using the live site.");
-  if (!shouldClear) return;
+  const adminKey = window.prompt("Admin key required to restore the shared showcase.");
+  if (!adminKey) return;
   try {
-    results = await apiRequest("/showcase/reset", { method: "POST" });
+    results = await apiRequest("/showcase/reset", { method: "POST", adminKey });
     activeFilter = "All";
     updateFilterButtons();
     render();
@@ -217,7 +218,11 @@ async function loadResults() {
 }
 
 async function apiRequest(path, options = {}) {
-  const response = await fetch(`${API_BASE}${path}`, options);
+  const { adminKey, ...fetchOptions } = options;
+  const headers = new Headers(fetchOptions.headers || {});
+  headers.set("X-AAPIN-Client", getClientId());
+  if (adminKey) headers.set("X-AAPIN-Admin-Key", adminKey);
+  const response = await fetch(`${API_BASE}${path}`, { ...fetchOptions, headers });
   if (!response.ok) {
     let message = "The live showcase could not complete that request.";
     try {
@@ -230,6 +235,15 @@ async function apiRequest(path, options = {}) {
   }
   if (response.status === 204) return null;
   return response.json();
+}
+
+function getClientId() {
+  let clientId = localStorage.getItem(CLIENT_KEY);
+  if (!clientId) {
+    clientId = crypto.randomUUID();
+    localStorage.setItem(CLIENT_KEY, clientId);
+  }
+  return clientId;
 }
 
 function loadFavorites() {
@@ -346,8 +360,12 @@ function render() {
     featureButton.addEventListener("click", () => toggleFavorite(result.id));
 
     voteButton.addEventListener("click", () => applaudResult(result.id));
-    card.querySelector(".edit-button").addEventListener("click", () => startEdit(result.id));
-    card.querySelector(".delete-button").addEventListener("click", () => deleteResult(result.id));
+    const editButton = card.querySelector(".edit-button");
+    const deleteButton = card.querySelector(".delete-button");
+    editButton.classList.toggle("is-hidden", !result.canEdit);
+    deleteButton.classList.toggle("is-hidden", !result.canEdit);
+    editButton.addEventListener("click", () => startEdit(result.id));
+    deleteButton.addEventListener("click", () => deleteResult(result.id));
 
     grid.append(card);
   });
@@ -373,7 +391,7 @@ async function applaudResult(id) {
 }
 
 async function deleteResult(id) {
-  const shouldDelete = window.confirm("Remove this submission from the shared showcase?");
+  const shouldDelete = window.confirm("Move this submission out of the shared showcase? An admin can recover it if needed.");
   if (!shouldDelete) return;
   try {
     await apiRequest(`/showcase/${id}`, { method: "DELETE" });

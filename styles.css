@@ -316,6 +316,7 @@ legend {
 
 .icon-button,
 .pin-button,
+.edit-button,
 .delete-button {
   display: grid;
   place-items: center;
@@ -413,6 +414,24 @@ svg {
   gap: 14px;
 }
 
+.admin-workspace {
+  grid-template-columns: minmax(260px, 0.34fr) minmax(0, 0.66fr);
+}
+
+.admin-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+.admin-card {
+  min-height: auto;
+}
+
+.recover-button {
+  width: 100%;
+}
+
 .idea-card {
   display: grid;
   gap: 14px;
@@ -470,6 +489,7 @@ svg {
 }
 
 .pin-button,
+.edit-button,
 .delete-button {
   width: 34px;
   height: 34px;
@@ -542,6 +562,14 @@ svg {
 
 .delete-button {
   color: #8f2e25;
+}
+
+.edit-button {
+  color: var(--teal);
+}
+
+.is-hidden {
+  display: none !important;
 }
 
 .empty-state {

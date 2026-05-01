@@ -23,6 +23,9 @@ DATA_DIR = ROOT / "data"
 UPLOAD_DIR = ROOT / "uploads"
 DB_PATH = Path(os.environ.get("AAPIN_DB_PATH", DATA_DIR / "aapin_live.db"))
 MAX_UPLOAD_BYTES = 8 * 1024 * 1024
+CLIENT_HEADER = "X-AAPIN-Client"
+ADMIN_HEADER = "X-AAPIN-Admin-Key"
+ADMIN_KEY = os.environ.get("AAPIN_ADMIN_KEY", "aapin-admin")
 
 IDEA_FIELDS = ("id", "title", "description", "category", "author", "stage", "votes", "pinned", "createdAt")
 SHOWCASE_FIELDS = (
@@ -80,6 +83,9 @@ def init_db() -> None:
               stage TEXT NOT NULL,
               votes INTEGER NOT NULL DEFAULT 0,
               pinned INTEGER NOT NULL DEFAULT 0,
+              owner_id TEXT NOT NULL DEFAULT '',
+              deleted_at TEXT NOT NULL DEFAULT '',
+              deleted_by TEXT NOT NULL DEFAULT '',
               created_at TEXT NOT NULL
             );
 
@@ -107,12 +113,27 @@ def init_db() -> None:
               image_path TEXT NOT NULL DEFAULT '',
               applause INTEGER NOT NULL DEFAULT 0,
               featured INTEGER NOT NULL DEFAULT 0,
+              owner_id TEXT NOT NULL DEFAULT '',
+              deleted_at TEXT NOT NULL DEFAULT '',
+              deleted_by TEXT NOT NULL DEFAULT '',
               created_at TEXT NOT NULL
             );
             """
         )
+        ensure_column(conn, "ideas", "owner_id", "TEXT NOT NULL DEFAULT ''")
+        ensure_column(conn, "ideas", "deleted_at", "TEXT NOT NULL DEFAULT ''")
+        ensure_column(conn, "ideas", "deleted_by", "TEXT NOT NULL DEFAULT ''")
+        ensure_column(conn, "showcase", "owner_id", "TEXT NOT NULL DEFAULT ''")
+        ensure_column(conn, "showcase", "deleted_at", "TEXT NOT NULL DEFAULT ''")
+        ensure_column(conn, "showcase", "deleted_by", "TEXT NOT NULL DEFAULT ''")
         seed_if_empty(conn, "ideas", DATA_DIR / "ideas.json", upsert_idea)
         seed_if_empty(conn, "showcase", DATA_DIR / "showcase.json", upsert_showcase)
+
+
+def ensure_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
+    columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+    if column not in columns:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
 
 def seed_if_empty(conn: sqlite3.Connection, table: str, path: Path, upsert) -> None:
@@ -124,8 +145,8 @@ def seed_if_empty(conn: sqlite3.Connection, table: str, path: Path, upsert) -> N
         upsert(conn, row)
 
 
-def row_to_idea(row: sqlite3.Row) -> dict:
-    return {
+def row_to_idea(row: sqlite3.Row, client_id: str = "", include_deleted: bool = False, include_owner: bool = False) -> dict:
+    idea = {
         "id": row["id"],
         "title": row["title"],
         "description": row["description"],
@@ -134,12 +155,19 @@ def row_to_idea(row: sqlite3.Row) -> dict:
         "stage": row["stage"],
         "votes": row["votes"],
         "pinned": bool(row["pinned"]),
+        "canEdit": bool(row["owner_id"] and row["owner_id"] == client_id),
         "createdAt": row["created_at"],
     }
+    if include_deleted:
+        idea["deletedAt"] = row["deleted_at"]
+        idea["deletedBy"] = row["deleted_by"]
+    if include_owner:
+        idea["ownerId"] = row["owner_id"]
+    return idea
 
 
-def row_to_showcase(row: sqlite3.Row) -> dict:
-    return {
+def row_to_showcase(row: sqlite3.Row, client_id: str = "", include_deleted: bool = False, include_owner: bool = False) -> dict:
+    item = {
         "id": row["id"],
         "title": row["title"],
         "category": row["category"],
@@ -164,8 +192,15 @@ def row_to_showcase(row: sqlite3.Row) -> dict:
         "imageData": "",
         "applause": row["applause"],
         "featured": bool(row["featured"]),
+        "canEdit": bool(row["owner_id"] and row["owner_id"] == client_id),
         "createdAt": row["created_at"],
     }
+    if include_deleted:
+        item["deletedAt"] = row["deleted_at"]
+        item["deletedBy"] = row["deleted_by"]
+    if include_owner:
+        item["ownerId"] = row["owner_id"]
+    return item
 
 
 def clean_text(value, fallback: str = "") -> str:
@@ -206,6 +241,9 @@ def normalize_idea(payload: dict, existing: dict | None = None) -> dict:
         "stage": clean_text(payload.get("stage"), existing.get("stage", "Spark")),
         "votes": int(payload.get("votes", existing.get("votes", 0)) or 0),
         "pinned": clean_bool(payload.get("pinned"), existing.get("pinned", False)),
+        "ownerId": clean_text(payload.get("ownerId"), existing.get("ownerId", "")),
+        "deletedAt": clean_text(payload.get("deletedAt"), existing.get("deletedAt", "")),
+        "deletedBy": clean_text(payload.get("deletedBy"), existing.get("deletedBy", "")),
         "createdAt": clean_text(payload.get("createdAt"), existing.get("createdAt") or now_iso()),
     }
 
@@ -244,6 +282,9 @@ def normalize_showcase(payload: dict, existing: dict | None = None) -> dict:
         "imagePath": clean_text(payload.get("imagePath"), existing.get("imagePath", "")),
         "applause": int(payload.get("applause", existing.get("applause", 0)) or 0),
         "featured": clean_bool(payload.get("featured"), existing.get("featured", False)),
+        "ownerId": clean_text(payload.get("ownerId"), existing.get("ownerId", "")),
+        "deletedAt": clean_text(payload.get("deletedAt"), existing.get("deletedAt", "")),
+        "deletedBy": clean_text(payload.get("deletedBy"), existing.get("deletedBy", "")),
         "createdAt": clean_text(payload.get("createdAt"), existing.get("createdAt") or now),
     }
 
@@ -252,12 +293,13 @@ def upsert_idea(conn: sqlite3.Connection, payload: dict) -> dict:
     idea = normalize_idea(payload)
     conn.execute(
         """
-        INSERT INTO ideas (id, title, description, category, author, stage, votes, pinned, created_at)
-        VALUES (:id, :title, :description, :category, :author, :stage, :votes, :pinned, :createdAt)
+        INSERT INTO ideas (id, title, description, category, author, stage, votes, pinned, owner_id, deleted_at, deleted_by, created_at)
+        VALUES (:id, :title, :description, :category, :author, :stage, :votes, :pinned, :ownerId, :deletedAt, :deletedBy, :createdAt)
         ON CONFLICT(id) DO UPDATE SET
           title=excluded.title, description=excluded.description, category=excluded.category,
           author=excluded.author, stage=excluded.stage, votes=excluded.votes,
-          pinned=excluded.pinned, created_at=excluded.created_at
+          pinned=excluded.pinned, owner_id=excluded.owner_id, deleted_at=excluded.deleted_at,
+          deleted_by=excluded.deleted_by, created_at=excluded.created_at
         """,
         {**idea, "pinned": int(idea["pinned"])},
     )
@@ -272,13 +314,15 @@ def upsert_showcase(conn: sqlite3.Connection, payload: dict, existing: dict | No
           id, title, category, heritage, origin_culture, author, webinar_consent, source,
           ai_mode, result_type, connections, original_ai_mode, original_result_type,
           original_connections, converted_from_needs_ai, converted_at, updated_at,
-          ai_text, reading_guide, resource, image_path, applause, featured, created_at
+          ai_text, reading_guide, resource, image_path, applause, featured, owner_id,
+          deleted_at, deleted_by, created_at
         )
         VALUES (
           :id, :title, :category, :heritage, :originCulture, :author, :webinarConsent, :source,
           :aiMode, :resultType, :connectionsJson, :originalAiMode, :originalResultType,
           :originalConnectionsJson, :convertedFromNeedsAiInt, :convertedAt, :updatedAt,
-          :aiText, :readingGuide, :resource, :imagePath, :applause, :featuredInt, :createdAt
+          :aiText, :readingGuide, :resource, :imagePath, :applause, :featuredInt,
+          :ownerId, :deletedAt, :deletedBy, :createdAt
         )
         ON CONFLICT(id) DO UPDATE SET
           title=excluded.title, category=excluded.category, heritage=excluded.heritage,
@@ -292,7 +336,8 @@ def upsert_showcase(conn: sqlite3.Connection, payload: dict, existing: dict | No
           converted_at=excluded.converted_at, updated_at=excluded.updated_at,
           ai_text=excluded.ai_text, reading_guide=excluded.reading_guide,
           resource=excluded.resource, image_path=excluded.image_path,
-          applause=excluded.applause, featured=excluded.featured, created_at=excluded.created_at
+          applause=excluded.applause, featured=excluded.featured, owner_id=excluded.owner_id,
+          deleted_at=excluded.deleted_at, deleted_by=excluded.deleted_by, created_at=excluded.created_at
         """,
         {
             **item,
@@ -329,14 +374,20 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         path = urlparse(self.path).path
-        if path == "/api/ideas":
-            self.send_json(self.list_ideas())
-        elif path == "/api/showcase":
-            self.send_json(self.list_showcase())
-        elif path.startswith("/api/"):
-            self.send_error_json(HTTPStatus.NOT_FOUND, "API route not found.")
-        else:
-            self.serve_static(path)
+        try:
+            if path == "/api/ideas":
+                self.send_json(self.list_ideas())
+            elif path == "/api/showcase":
+                self.send_json(self.list_showcase())
+            elif path == "/api/admin/deleted":
+                self.require_admin()
+                self.send_json(self.list_deleted())
+            elif path.startswith("/api/"):
+                self.send_error_json(HTTPStatus.NOT_FOUND, "API route not found.")
+            else:
+                self.serve_static(path)
+        except PermissionError as exc:
+            self.send_error_json(HTTPStatus.FORBIDDEN, str(exc))
 
     def do_HEAD(self) -> None:
         path = urlparse(self.path).path
@@ -355,6 +406,9 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(self.reset_table("ideas", DATA_DIR / "ideas.json", upsert_idea))
             elif len(path) == 4 and path[:2] == ["api", "ideas"] and path[3] == "vote":
                 self.send_json(self.increment_idea(path[2]))
+            elif len(path) == 5 and path[:2] == ["api", "admin"] and path[4] == "recover":
+                self.require_admin()
+                self.send_json(self.recover_row(path[2], path[3]))
             elif path == ["api", "showcase"]:
                 self.send_json(self.create_showcase(), HTTPStatus.CREATED)
             elif path == ["api", "showcase", "reset"]:
@@ -363,6 +417,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(self.increment_showcase(path[2]))
             else:
                 self.send_error_json(HTTPStatus.NOT_FOUND, "API route not found.")
+        except PermissionError as exc:
+            self.send_error_json(HTTPStatus.FORBIDDEN, str(exc))
         except ValueError as exc:
             self.send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
 
@@ -375,17 +431,24 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(self.update_showcase(path[2]))
             else:
                 self.send_error_json(HTTPStatus.NOT_FOUND, "API route not found.")
+        except PermissionError as exc:
+            self.send_error_json(HTTPStatus.FORBIDDEN, str(exc))
         except ValueError as exc:
             self.send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
 
     def do_DELETE(self) -> None:
         path = urlparse(self.path).path.strip("/").split("/")
-        if len(path) == 3 and path[:2] == ["api", "ideas"]:
-            self.delete_row("ideas", path[2])
-        elif len(path) == 3 and path[:2] == ["api", "showcase"]:
-            self.delete_row("showcase", path[2])
-        else:
-            self.send_error_json(HTTPStatus.NOT_FOUND, "API route not found.")
+        try:
+            if len(path) == 3 and path[:2] == ["api", "ideas"]:
+                self.soft_delete_row("ideas", path[2])
+            elif len(path) == 3 and path[:2] == ["api", "showcase"]:
+                self.soft_delete_row("showcase", path[2])
+            else:
+                self.send_error_json(HTTPStatus.NOT_FOUND, "API route not found.")
+        except PermissionError as exc:
+            self.send_error_json(HTTPStatus.FORBIDDEN, str(exc))
+        except ValueError as exc:
+            self.send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
 
     def parse_json(self) -> dict:
         length = int(self.headers.get("Content-Length", "0") or 0)
@@ -414,18 +477,36 @@ class Handler(BaseHTTPRequestHandler):
             return payload
         return self.parse_json()
 
+    def client_id(self) -> str:
+        return clean_text(self.headers.get(CLIENT_HEADER))
+
+    def is_admin(self) -> bool:
+        return bool(ADMIN_KEY and self.headers.get(ADMIN_HEADER) == ADMIN_KEY)
+
+    def require_admin(self) -> None:
+        if not self.is_admin():
+            raise PermissionError("Admin key is required for this action.")
+
+    def require_owner_or_admin(self, existing: dict) -> None:
+        if self.is_admin():
+            return
+        if existing.get("ownerId") and existing["ownerId"] == self.client_id():
+            return
+        raise PermissionError("Only the original submitter can edit or delete this item.")
+
     def list_ideas(self) -> list[dict]:
         with db() as conn:
-            rows = conn.execute("SELECT * FROM ideas ORDER BY datetime(created_at) DESC").fetchall()
-        return [row_to_idea(row) for row in rows]
+            rows = conn.execute("SELECT * FROM ideas WHERE deleted_at = '' ORDER BY datetime(created_at) DESC").fetchall()
+        return [row_to_idea(row, self.client_id()) for row in rows]
 
     def list_showcase(self) -> list[dict]:
         with db() as conn:
-            rows = conn.execute("SELECT * FROM showcase ORDER BY datetime(created_at) DESC").fetchall()
-        return [row_to_showcase(row) for row in rows]
+            rows = conn.execute("SELECT * FROM showcase WHERE deleted_at = '' ORDER BY datetime(created_at) DESC").fetchall()
+        return [row_to_showcase(row, self.client_id()) for row in rows]
 
     def create_idea(self) -> dict:
         payload = self.parse_json()
+        payload["ownerId"] = self.client_id()
         with db() as conn:
             idea = upsert_idea(conn, payload)
         return idea
@@ -436,19 +517,21 @@ class Handler(BaseHTTPRequestHandler):
             existing = self.get_idea(conn, item_id)
             if not existing:
                 raise ValueError("Idea not found.")
+            self.require_owner_or_admin(existing)
             idea = upsert_idea(conn, {**existing, **payload, "id": item_id})
         return idea
 
     def increment_idea(self, item_id: str) -> dict:
         with db() as conn:
             conn.execute("UPDATE ideas SET votes = votes + 1 WHERE id = ?", (item_id,))
-            row = conn.execute("SELECT * FROM ideas WHERE id = ?", (item_id,)).fetchone()
+            row = conn.execute("SELECT * FROM ideas WHERE id = ? AND deleted_at = ''", (item_id,)).fetchone()
             if not row:
                 raise ValueError("Idea not found.")
-            return row_to_idea(row)
+            return row_to_idea(row, self.client_id())
 
     def create_showcase(self) -> dict:
         payload = self.parse_multipart_or_json()
+        payload["ownerId"] = self.client_id()
         with db() as conn:
             item = upsert_showcase(conn, payload)
         return item
@@ -459,18 +542,20 @@ class Handler(BaseHTTPRequestHandler):
             existing = self.get_showcase(conn, item_id)
             if not existing:
                 raise ValueError("Showcase submission not found.")
+            self.require_owner_or_admin(existing)
             item = upsert_showcase(conn, {**existing, **payload, "id": item_id}, existing)
         return item
 
     def increment_showcase(self, item_id: str) -> dict:
         with db() as conn:
             conn.execute("UPDATE showcase SET applause = applause + 1 WHERE id = ?", (item_id,))
-            row = conn.execute("SELECT * FROM showcase WHERE id = ?", (item_id,)).fetchone()
+            row = conn.execute("SELECT * FROM showcase WHERE id = ? AND deleted_at = ''", (item_id,)).fetchone()
             if not row:
                 raise ValueError("Showcase submission not found.")
-            return row_to_showcase(row)
+            return row_to_showcase(row, self.client_id())
 
     def reset_table(self, table: str, seed_path: Path, upsert) -> list[dict]:
+        self.require_admin()
         with db() as conn:
             conn.execute(f"DELETE FROM {table}")
             rows = json.loads(seed_path.read_text(encoding="utf-8"))
@@ -478,19 +563,47 @@ class Handler(BaseHTTPRequestHandler):
                 upsert(conn, row)
         return self.list_ideas() if table == "ideas" else self.list_showcase()
 
-    def delete_row(self, table: str, item_id: str) -> None:
+    def soft_delete_row(self, table: str, item_id: str) -> None:
+        if table not in {"ideas", "showcase"}:
+            raise ValueError("Unknown content type.")
         with db() as conn:
-            conn.execute(f"DELETE FROM {table} WHERE id = ?", (item_id,))
+            existing = self.get_idea(conn, item_id) if table == "ideas" else self.get_showcase(conn, item_id)
+            if not existing:
+                raise ValueError("Item not found.")
+            self.require_owner_or_admin(existing)
+            conn.execute(
+                f"UPDATE {table} SET deleted_at = ?, deleted_by = ? WHERE id = ?",
+                (now_iso(), "admin" if self.is_admin() else self.client_id(), item_id),
+            )
         self.send_response(HTTPStatus.NO_CONTENT)
         self.end_headers()
 
+    def list_deleted(self) -> dict:
+        with db() as conn:
+            ideas = conn.execute("SELECT * FROM ideas WHERE deleted_at != '' ORDER BY datetime(deleted_at) DESC").fetchall()
+            showcase = conn.execute("SELECT * FROM showcase WHERE deleted_at != '' ORDER BY datetime(deleted_at) DESC").fetchall()
+        return {
+            "ideas": [row_to_idea(row, include_deleted=True) for row in ideas],
+            "showcase": [row_to_showcase(row, include_deleted=True) for row in showcase],
+        }
+
+    def recover_row(self, table: str, item_id: str) -> dict:
+        if table not in {"ideas", "showcase"}:
+            raise ValueError("Unknown content type.")
+        with db() as conn:
+            conn.execute(f"UPDATE {table} SET deleted_at = '', deleted_by = '' WHERE id = ?", (item_id,))
+            row = conn.execute(f"SELECT * FROM {table} WHERE id = ?", (item_id,)).fetchone()
+            if not row:
+                raise ValueError("Item not found.")
+        return row_to_idea(row) if table == "ideas" else row_to_showcase(row)
+
     def get_idea(self, conn: sqlite3.Connection, item_id: str) -> dict | None:
         row = conn.execute("SELECT * FROM ideas WHERE id = ?", (item_id,)).fetchone()
-        return row_to_idea(row) if row else None
+        return row_to_idea(row, include_deleted=True, include_owner=True) if row else None
 
     def get_showcase(self, conn: sqlite3.Connection, item_id: str) -> dict | None:
         row = conn.execute("SELECT * FROM showcase WHERE id = ?", (item_id,)).fetchone()
-        return row_to_showcase(row) if row else None
+        return row_to_showcase(row, include_deleted=True, include_owner=True) if row else None
 
     def serve_static(self, path: str, head_only: bool = False) -> None:
         safe_path = posixpath.normpath(unquote(path)).lstrip("/")

@@ -39,7 +39,15 @@ For a lightweight internal deployment:
 Example service command:
 
 ```bash
-HOST=127.0.0.1 PORT=8000 python3 /path/to/heritage-meets-innovations-ai/server.py
+HOST=127.0.0.1 PORT=8000 AAPIN_ADMIN_KEY='choose-a-private-admin-key' python3 /path/to/heritage-meets-innovations-ai/server.py
 ```
 
 For the expected scale of a few hundred showcase entries and around one hundred ideas, this single-VM SQLite setup should stay quick and simple.
+
+## Permissions
+
+- Each member browser receives a private contributor ID stored in `localStorage`.
+- Members can edit or soft-delete only submissions created from that same browser.
+- Soft-deleted submissions disappear from the public gallery/wall but remain in SQLite.
+- Admins can open `/admin.html`, enter `AAPIN_ADMIN_KEY`, review deleted submissions, and recover them.
+- Shared reset actions also require the admin key.

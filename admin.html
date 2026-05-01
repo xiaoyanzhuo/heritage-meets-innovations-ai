@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>AAPIN Admin Recovery</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="shell">
+      <nav class="site-nav" aria-label="Event pages">
+        <a class="site-nav__link" href="heritage-showcase-v2.html">Heritage Showcase</a>
+        <a class="site-nav__link" href="index.html">Idea Wall</a>
+        <a class="site-nav__link is-active" href="admin.html">Admin</a>
+      </nav>
+
+      <section class="hero admin-hero" aria-labelledby="page-title">
+        <div class="hero__content">
+          <p class="eyebrow">AAPIN Presents</p>
+          <h1 id="page-title">Admin Recovery</h1>
+          <p class="lede">Recover member submissions that were accidentally removed from the live Idea Wall or Heritage Showcase.</p>
+        </div>
+      </section>
+
+      <section class="workspace admin-workspace" aria-label="Admin recovery tools">
+        <form class="panel submit-panel" id="adminForm">
+          <div class="section-heading">
+            <p class="eyebrow">Permission manage</p>
+            <h2>Admin access</h2>
+          </div>
+          <label>
+            Admin key
+            <input name="adminKey" type="password" placeholder="Enter admin key" required>
+          </label>
+          <button class="primary-action" type="submit">Load deleted items</button>
+        </form>
+
+        <section class="wall" aria-labelledby="deleted-title">
+          <div class="wall__toolbar">
+            <div class="section-heading">
+              <p class="eyebrow">Soft-deleted records</p>
+              <h2 id="deleted-title">Recover submissions</h2>
+            </div>
+          </div>
+          <div class="admin-list" id="adminList"></div>
+          <p class="empty-state" id="adminEmpty">No deleted submissions found.</p>
+        </section>
+      </section>
+    </main>
+
+    <template id="adminItemTemplate">
+      <article class="idea-card admin-card">
+        <div class="idea-card__top">
+          <span class="tag"></span>
+          <span class="stage"></span>
+        </div>
+        <h3></h3>
+        <p class="idea-copy"></p>
+        <div class="idea-meta">
+          <span class="author"></span>
+          <span class="deleted-at"></span>
+        </div>
+        <div class="idea-actions">
+          <button class="primary-action recover-button" type="button">Recover</button>
+        </div>
+      </article>
+    </template>
+
+    <script src="admin.js"></script>
+  </body>
+</html>
