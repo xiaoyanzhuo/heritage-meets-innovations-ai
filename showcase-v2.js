@@ -112,6 +112,20 @@ const submitLabel = document.querySelector("#submitLabel");
 const cancelEditButton = document.querySelector("#cancelEditButton");
 const favoritesList = document.querySelector("#favoritesList");
 const favoritesEmpty = document.querySelector("#favoritesEmpty");
+const showcaseWorkspace = document.querySelector("#showcaseWorkspace");
+const showcaseFullViewButton = document.querySelector("#showcaseFullViewButton");
+const showcaseGalleryOnlyButton = document.querySelector("#showcaseGalleryOnlyButton");
+const resultViewer = document.querySelector("#resultViewer");
+const viewerCloseButton = document.querySelector("#viewerCloseButton");
+const viewerImage = document.querySelector("#viewerImage");
+const viewerType = document.querySelector("#viewerType");
+const viewerCategory = document.querySelector("#viewerCategory");
+const viewerTitle = document.querySelector("#viewerTitle");
+const viewerMeta = document.querySelector("#viewerMeta");
+const viewerAiText = document.querySelector("#viewerAiText");
+const viewerReading = document.querySelector("#viewerReading");
+const viewerSource = document.querySelector("#viewerSource");
+const viewerResource = document.querySelector("#viewerResource");
 
 form.addEventListener("change", (event) => {
   if (event.target.name === "aiMode") updateModePanels();
@@ -136,6 +150,13 @@ form.addEventListener("submit", async (event) => {
 });
 
 cancelEditButton.addEventListener("click", resetFormState);
+
+showcaseFullViewButton.addEventListener("click", () => setShowcaseView("full"));
+showcaseGalleryOnlyButton.addEventListener("click", () => setShowcaseView("gallery"));
+viewerCloseButton.addEventListener("click", closeResultViewer);
+resultViewer.addEventListener("click", (event) => {
+  if (event.target === resultViewer) closeResultViewer();
+});
 
 filters.addEventListener("click", (event) => {
   const button = event.target.closest("[data-filter]");
@@ -259,6 +280,16 @@ function saveFavorites() {
   localStorage.setItem(FAVORITES_KEY, JSON.stringify([...favoriteIds]));
 }
 
+function setShowcaseView(view) {
+  const isGalleryOnly = view === "gallery";
+  showcaseWorkspace.classList.toggle("is-gallery-only", isGalleryOnly);
+  showcaseFullViewButton.classList.toggle("is-active", !isGalleryOnly);
+  showcaseGalleryOnlyButton.classList.toggle("is-active", isGalleryOnly);
+  showcaseFullViewButton.setAttribute("aria-pressed", String(!isGalleryOnly));
+  showcaseGalleryOnlyButton.setAttribute("aria-pressed", String(isGalleryOnly));
+  localStorage.setItem("aapi-ai-showcase-view", view);
+}
+
 function normalizeResults(storedResults) {
   return storedResults.map((entry) => {
     const normalizedType = normalizeShareType(entry);
@@ -366,6 +397,17 @@ function render() {
     deleteButton.classList.toggle("is-hidden", !result.canEdit);
     editButton.addEventListener("click", () => startEdit(result.id));
     deleteButton.addEventListener("click", () => deleteResult(result.id));
+    card.addEventListener("click", (event) => {
+      if (event.target.closest("button, a, details, summary")) return;
+      openResultViewer(result.id);
+    });
+    card.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      if (event.target.closest("button, a, details, summary")) return;
+      event.preventDefault();
+      openResultViewer(result.id);
+    });
+    card.tabIndex = 0;
 
     grid.append(card);
   });
@@ -426,6 +468,65 @@ function renderFavorites() {
     chip.textContent = result.title;
     favoritesList.append(chip);
   });
+}
+
+function openResultViewer(id) {
+  const result = results.find((entry) => entry.id === id);
+  if (!result) return;
+
+  const isNoAi = result.resultType === "No AI Please";
+  const imageSource = result.imagePath || result.imageData || (isImageResource(result.resource) ? result.resource : "");
+  const media = resultViewer.querySelector(".result-viewer__media");
+
+  viewerType.textContent = SHARE_LABELS[result.resultType] || result.resultType;
+  viewerType.dataset.type = result.resultType;
+  viewerCategory.textContent = result.category;
+  viewerTitle.textContent = result.title;
+  viewerMeta.textContent = `${result.author} · ${result.originCulture || result.heritage} · ${result.connections.length ? result.connections.join(" + ") : "Source only"}`;
+  viewerSource.textContent = result.source;
+
+  if (imageSource) {
+    viewerImage.src = imageSource;
+    viewerImage.alt = isNoAi ? `${result.title} source image` : `${result.title} shared image`;
+    media.classList.remove("is-hidden");
+  } else {
+    viewerImage.removeAttribute("src");
+    viewerImage.alt = "";
+    media.classList.add("is-hidden");
+  }
+
+  viewerAiText.textContent = isNoAi ? "No-AI share: source preserved without AI transformation." : result.aiText;
+  viewerAiText.classList.toggle("is-source-only", isNoAi);
+
+  if (result.readingGuide) {
+    viewerReading.textContent = `How to speak it: ${result.readingGuide}`;
+    viewerReading.classList.add("is-visible");
+  } else {
+    viewerReading.textContent = "";
+    viewerReading.classList.remove("is-visible");
+  }
+
+  if (result.resource) {
+    viewerResource.href = result.resource;
+    viewerResource.classList.add("is-visible");
+  } else {
+    viewerResource.removeAttribute("href");
+    viewerResource.classList.remove("is-visible");
+  }
+
+  if (typeof resultViewer.showModal === "function") {
+    resultViewer.showModal();
+  } else {
+    resultViewer.setAttribute("open", "");
+  }
+}
+
+function closeResultViewer() {
+  if (typeof resultViewer.close === "function") {
+    resultViewer.close();
+  } else {
+    resultViewer.removeAttribute("open");
+  }
 }
 
 function startEdit(id) {
@@ -539,6 +640,7 @@ function toCsv(rows) {
 
 async function initialize() {
   updateModePanels();
+  setShowcaseView(localStorage.getItem("aapi-ai-showcase-view") === "gallery" ? "gallery" : "full");
   results = await loadResults();
   render();
 }

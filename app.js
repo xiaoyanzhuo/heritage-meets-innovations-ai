@@ -57,6 +57,9 @@ const favoritesList = document.querySelector("#favoritesList");
 const favoritesEmpty = document.querySelector("#favoritesEmpty");
 const ideaSubmitLabel = document.querySelector("#ideaSubmitLabel");
 const ideaCancelEditButton = document.querySelector("#ideaCancelEditButton");
+const ideaWorkspace = document.querySelector("#ideaWorkspace");
+const ideaFullViewButton = document.querySelector("#ideaFullViewButton");
+const ideaWallOnlyButton = document.querySelector("#ideaWallOnlyButton");
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -89,6 +92,9 @@ form.addEventListener("submit", async (event) => {
 });
 
 ideaCancelEditButton.addEventListener("click", resetFormState);
+
+ideaFullViewButton.addEventListener("click", () => setIdeaView("full"));
+ideaWallOnlyButton.addEventListener("click", () => setIdeaView("wall"));
 
 filters.addEventListener("click", (event) => {
   const button = event.target.closest("[data-filter]");
@@ -173,6 +179,16 @@ function loadFavorites() {
 
 function saveFavorites() {
   localStorage.setItem(FAVORITES_KEY, JSON.stringify([...favoriteIds]));
+}
+
+function setIdeaView(view) {
+  const isWallOnly = view === "wall";
+  ideaWorkspace.classList.toggle("is-wall-only", isWallOnly);
+  ideaFullViewButton.classList.toggle("is-active", !isWallOnly);
+  ideaWallOnlyButton.classList.toggle("is-active", isWallOnly);
+  ideaFullViewButton.setAttribute("aria-pressed", String(!isWallOnly));
+  ideaWallOnlyButton.setAttribute("aria-pressed", String(isWallOnly));
+  localStorage.setItem("aapi-ai-idea-wall-view", view);
 }
 
 function render() {
@@ -315,6 +331,7 @@ function toCsv(rows) {
 }
 
 async function initialize() {
+  setIdeaView(localStorage.getItem("aapi-ai-idea-wall-view") === "wall" ? "wall" : "full");
   ideas = await loadIdeas();
   render();
 }

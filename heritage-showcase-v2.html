@@ -32,7 +32,7 @@
         </div>
       </section>
 
-      <section class="studio-layout" aria-label="Heritage submission studio">
+      <section class="studio-layout" id="showcaseWorkspace" aria-label="Heritage submission studio">
         <form class="panel submit-panel studio-panel" id="studioForm">
           <div class="section-heading">
             <p class="eyebrow">Member submission</p>
@@ -160,6 +160,10 @@
               <h2 id="results-title">Member shares</h2>
             </div>
             <div class="toolbar-actions">
+              <div class="view-toggle" role="group" aria-label="Showcase view">
+                <button class="view-toggle__button is-active" id="showcaseFullViewButton" type="button">Submit + gallery</button>
+                <button class="view-toggle__button" id="showcaseGalleryOnlyButton" type="button">Gallery only</button>
+              </div>
               <button class="icon-button" id="exportButton" type="button" aria-label="Export AI results as CSV" title="Export AI results as CSV">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 19h14"></path></svg>
               </button>
@@ -232,6 +236,32 @@
         </div>
       </article>
     </template>
+
+    <dialog class="result-viewer" id="resultViewer" aria-labelledby="viewerTitle">
+      <button class="icon-button result-viewer__close" id="viewerCloseButton" type="button" aria-label="Close expanded view" title="Close expanded view">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg>
+      </button>
+      <div class="result-viewer__content">
+        <div class="result-viewer__media">
+          <img id="viewerImage" alt="">
+        </div>
+        <div class="result-viewer__details">
+          <div class="result-card__header">
+            <span class="result-type" id="viewerType"></span>
+            <span class="source-type" id="viewerCategory"></span>
+          </div>
+          <h2 id="viewerTitle"></h2>
+          <p class="idea-meta" id="viewerMeta"></p>
+          <p class="ai-output" id="viewerAiText"></p>
+          <p class="reading-output" id="viewerReading"></p>
+          <details open>
+            <summary>Member source</summary>
+            <p class="source-copy" id="viewerSource"></p>
+          </details>
+          <a class="resource-link" id="viewerResource" target="_blank" rel="noreferrer">Open resource</a>
+        </div>
+      </div>
+    </dialog>
 
     <script src="showcase-v2.js"></script>
   </body>

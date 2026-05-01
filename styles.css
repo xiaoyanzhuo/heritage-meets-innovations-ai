@@ -325,6 +325,51 @@ legend {
   gap: 8px;
 }
 
+.toolbar-actions {
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.view-toggle {
+  display: inline-flex;
+  min-height: 38px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fffdf8;
+}
+
+.view-toggle__button {
+  border: 0;
+  color: #26385b;
+  background: transparent;
+  padding: 8px 10px;
+  font-size: 0.8rem;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.view-toggle__button.is-active {
+  color: #fff;
+  background: var(--ink);
+}
+
+.workspace.is-wall-only,
+.studio-layout.is-gallery-only {
+  grid-template-columns: 1fr;
+}
+
+.workspace.is-wall-only > .submit-panel,
+.studio-layout.is-gallery-only > .submit-panel {
+  display: none;
+}
+
+.workspace.is-wall-only .wall,
+.studio-layout.is-gallery-only .wall {
+  min-height: 0;
+}
+
 .icon-button,
 .pin-button,
 .edit-button,
@@ -423,6 +468,10 @@ svg {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(238px, 1fr));
   gap: 14px;
+}
+
+.workspace.is-wall-only .idea-grid {
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
 }
 
 .admin-workspace {

@@ -33,7 +33,7 @@
         </div>
       </section>
 
-      <section class="workspace" aria-label="Idea submission and wall">
+      <section class="workspace" id="ideaWorkspace" aria-label="Idea submission and wall">
         <form class="panel submit-panel" id="ideaForm">
           <div class="section-heading">
             <p class="eyebrow">Submit an idea</p>
@@ -91,6 +91,10 @@
               <h2 id="wall-title">Community ideas</h2>
             </div>
             <div class="toolbar-actions">
+              <div class="view-toggle" role="group" aria-label="Idea wall view">
+                <button class="view-toggle__button is-active" id="ideaFullViewButton" type="button">Submit + wall</button>
+                <button class="view-toggle__button" id="ideaWallOnlyButton" type="button">Wall only</button>
+              </div>
               <button class="icon-button" id="exportButton" type="button" aria-label="Export ideas as CSV" title="Export ideas as CSV">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 19h14"></path></svg>
               </button>
