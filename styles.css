@@ -489,11 +489,31 @@ svg {
   gap: 18px;
 }
 
+.admin-edit-panel {
+  display: grid;
+  gap: 14px;
+  border: 1px solid rgba(111, 44, 143, 0.24);
+  border-radius: 8px;
+  background: rgba(111, 44, 143, 0.06);
+  padding: 18px;
+}
+
+.admin-edit-panel textarea {
+  min-height: 110px;
+}
+
+.admin-edit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .admin-card {
   min-height: auto;
 }
 
 .recover-button,
+.edit-live-button,
 .remove-button {
   width: 100%;
 }

@@ -36,6 +36,96 @@
         </form>
 
         <section class="wall admin-board" aria-labelledby="moderation-title">
+          <form class="admin-edit-panel is-hidden" id="adminEditForm">
+            <div class="section-heading">
+              <p class="eyebrow">Admin edit</p>
+              <h2 id="adminEditTitle">Edit submission</h2>
+            </div>
+            <input type="hidden" name="table">
+            <input type="hidden" name="id">
+
+            <label>
+              Title
+              <input name="title" type="text" maxlength="90" required>
+            </label>
+
+            <label data-admin-field="description">
+              Idea description
+              <textarea name="description" maxlength="420"></textarea>
+            </label>
+
+            <label data-admin-field="source">
+              Member source
+              <textarea name="source" maxlength="820"></textarea>
+            </label>
+
+            <div class="form-grid">
+              <label>
+                Category
+                <input name="category" type="text" maxlength="80">
+              </label>
+              <label data-admin-field="stage">
+                Stage
+                <input name="stage" type="text" maxlength="80">
+              </label>
+            </div>
+
+            <div class="form-grid" data-admin-field="showcaseMeta">
+              <label>
+                Heritage focus
+                <input name="heritage" type="text" maxlength="80">
+              </label>
+              <label>
+                Origin culture/region
+                <input name="originCulture" type="text" maxlength="120">
+              </label>
+            </div>
+
+            <label>
+              Author
+              <input name="author" type="text" maxlength="80">
+            </label>
+
+            <div class="form-grid" data-admin-field="showcaseStatus">
+              <label>
+                Current status
+                <select name="resultType">
+                  <option value="No AI Please">No AI Please</option>
+                  <option value="Needs AI Help">Needs AI Help</option>
+                  <option value="AI-Assisted Result">AI-Assisted Result</option>
+                </select>
+              </label>
+              <label>
+                Webinar sharing
+                <select name="webinarConsent">
+                  <option value="Yes">Yes</option>
+                  <option value="Maybe">Maybe</option>
+                  <option value="No">No</option>
+                </select>
+              </label>
+            </div>
+
+            <label data-admin-field="aiText">
+              AI text result
+              <textarea name="aiText" maxlength="920"></textarea>
+            </label>
+
+            <label data-admin-field="readingGuide">
+              How to speak it
+              <textarea name="readingGuide" maxlength="420"></textarea>
+            </label>
+
+            <label data-admin-field="resource">
+              Image or document link
+              <input name="resource" type="url">
+            </label>
+
+            <div class="admin-edit-actions">
+              <button class="primary-action" type="submit">Save changes</button>
+              <button class="secondary-action" id="adminCancelEditButton" type="button">Cancel</button>
+            </div>
+          </form>
+
           <div class="wall__toolbar">
             <div class="section-heading">
               <p class="eyebrow">Live moderation</p>
@@ -73,6 +163,7 @@
         </div>
         <div class="idea-actions">
           <button class="primary-action recover-button" type="button">Recover</button>
+          <button class="secondary-action edit-live-button is-hidden" type="button">Edit</button>
           <button class="secondary-action remove-button is-hidden" type="button">Remove from public view</button>
         </div>
       </article>
