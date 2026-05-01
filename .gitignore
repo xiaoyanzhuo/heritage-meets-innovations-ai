@@ -1,2 +1,8 @@
 .DS_Store
 __pycache__/
+*.pyc
+data/*.db
+data/*.db-shm
+data/*.db-wal
+uploads/
+streamlit-site/

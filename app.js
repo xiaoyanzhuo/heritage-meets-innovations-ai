@@ -1,5 +1,5 @@
-const STORAGE_KEY = "aapi-ai-idea-wall";
 const FAVORITES_KEY = "aapi-ai-idea-wall-favorites";
+const API_BASE = window.location.protocol === "file:" ? "" : "/api";
 
 const seedIdeas = [
   {
@@ -37,7 +37,7 @@ const seedIdeas = [
   }
 ];
 
-let ideas = loadIdeas();
+let ideas = [];
 let activeFilter = "All";
 let favoriteIds = loadFavorites();
 
@@ -54,28 +54,32 @@ const clearButton = document.querySelector("#clearButton");
 const favoritesList = document.querySelector("#favoritesList");
 const favoritesEmpty = document.querySelector("#favoritesEmpty");
 
-form.addEventListener("submit", (event) => {
+form.addEventListener("submit", async (event) => {
   event.preventDefault();
   const formData = new FormData(form);
   const idea = {
-    id: crypto.randomUUID(),
     title: formData.get("title").trim(),
     description: formData.get("description").trim(),
     category: formData.get("category"),
     author: formData.get("author").trim() || "Anonymous",
-    stage: formData.get("stage"),
-    votes: 0,
-    pinned: false,
-    createdAt: new Date().toISOString()
+    stage: formData.get("stage")
   };
 
-  ideas = [idea, ...ideas];
-  saveIdeas();
-  form.reset();
-  form.querySelector('input[name="stage"][value="Spark"]').checked = true;
-  activeFilter = "All";
-  updateFilterButtons();
-  render();
+  try {
+    await apiRequest("/ideas", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(idea)
+    });
+    ideas = await loadIdeas();
+    form.reset();
+    form.querySelector('input[name="stage"][value="Spark"]').checked = true;
+    activeFilter = "All";
+    updateFilterButtons();
+    render();
+  } catch (error) {
+    window.alert(error.message);
+  }
 });
 
 filters.addEventListener("click", (event) => {
@@ -97,30 +101,44 @@ exportButton.addEventListener("click", () => {
   URL.revokeObjectURL(url);
 });
 
-clearButton.addEventListener("click", () => {
-  const shouldClear = window.confirm("Clear locally saved ideas and restore the starter examples?");
+clearButton.addEventListener("click", async () => {
+  const shouldClear = window.confirm("Restore the shared idea wall to starter examples? This affects everyone using the live site.");
   if (!shouldClear) return;
-  ideas = [...seedIdeas];
-  saveIdeas();
-  activeFilter = "All";
-  updateFilterButtons();
-  render();
+  try {
+    ideas = await apiRequest("/ideas/reset", { method: "POST" });
+    activeFilter = "All";
+    updateFilterButtons();
+    render();
+  } catch (error) {
+    window.alert(error.message);
+  }
 });
 
-function loadIdeas() {
-  const stored = localStorage.getItem(STORAGE_KEY);
-  if (!stored) return [...seedIdeas];
-
+async function loadIdeas() {
+  if (!API_BASE) return [...seedIdeas];
   try {
-    const parsed = JSON.parse(stored);
-    return Array.isArray(parsed) && parsed.length ? parsed : [...seedIdeas];
-  } catch {
+    const loadedIdeas = await apiRequest("/ideas");
+    return Array.isArray(loadedIdeas) ? loadedIdeas : [...seedIdeas];
+  } catch (error) {
+    console.warn(error);
     return [...seedIdeas];
   }
 }
 
-function saveIdeas() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(ideas));
+async function apiRequest(path, options = {}) {
+  const response = await fetch(`${API_BASE}${path}`, options);
+  if (!response.ok) {
+    let message = "The live idea wall could not complete that request.";
+    try {
+      const body = await response.json();
+      message = body.error || message;
+    } catch {
+      // Keep the fallback message.
+    }
+    throw new Error(message);
+  }
+  if (response.status === 204) return null;
+  return response.json();
 }
 
 function loadFavorites() {
@@ -160,7 +178,7 @@ function render() {
     pinButton.setAttribute("aria-pressed", String(isFavorite));
     pinButton.addEventListener("click", () => toggleFavorite(idea.id));
 
-    voteButton.addEventListener("click", () => updateIdea(idea.id, { votes: idea.votes + 1 }));
+    voteButton.addEventListener("click", () => voteIdea(idea.id));
     card.querySelector(".delete-button").addEventListener("click", () => deleteIdea(idea.id));
 
     grid.append(card);
@@ -171,18 +189,28 @@ function render() {
   renderFavorites();
 }
 
-function updateIdea(id, patch) {
-  ideas = ideas.map((idea) => idea.id === id ? { ...idea, ...patch } : idea);
-  saveIdeas();
-  render();
+async function voteIdea(id) {
+  try {
+    const updatedIdea = await apiRequest(`/ideas/${id}/vote`, { method: "POST" });
+    ideas = ideas.map((idea) => idea.id === id ? updatedIdea : idea);
+    render();
+  } catch (error) {
+    window.alert(error.message);
+  }
 }
 
-function deleteIdea(id) {
-  ideas = ideas.filter((idea) => idea.id !== id);
-  favoriteIds.delete(id);
-  saveFavorites();
-  saveIdeas();
-  render();
+async function deleteIdea(id) {
+  const shouldDelete = window.confirm("Remove this idea from the shared wall?");
+  if (!shouldDelete) return;
+  try {
+    await apiRequest(`/ideas/${id}`, { method: "DELETE" });
+    ideas = ideas.filter((idea) => idea.id !== id);
+    favoriteIds.delete(id);
+    saveFavorites();
+    render();
+  } catch (error) {
+    window.alert(error.message);
+  }
 }
 
 function toggleFavorite(id) {
@@ -229,7 +257,7 @@ function toCsv(rows) {
     idea.author,
     idea.stage,
     idea.votes,
-    idea.pinned ? "Yes" : "No",
+    favoriteIds.has(idea.id) ? "Saved by this browser" : "",
     idea.createdAt
   ]);
 
@@ -238,4 +266,9 @@ function toCsv(rows) {
     .join("\n");
 }
 
-render();
+async function initialize() {
+  ideas = await loadIdeas();
+  render();
+}
+
+initialize();

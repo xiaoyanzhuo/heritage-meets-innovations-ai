@@ -1,6 +1,5 @@
-const STORAGE_KEY = "aapi-ai-heritage-results-v2";
 const FAVORITES_KEY = "aapi-ai-heritage-showcase-favorites";
-const DEPRECATED_SEED_IDS = new Set(["v2-seed-video-story", "v2-seed-animation-tradition", "v2-seed-pronunciation-name", "v2-seed-source-only-legacy"]);
+const API_BASE = window.location.protocol === "file:" ? "" : "/api";
 const AI_CONNECTIONS = ["Translate", "Explain", "AI Image"];
 const SHARE_TYPES = new Set(["No AI Please", "Needs AI Help", "AI-Assisted Result"]);
 const SHARE_LABELS = {
@@ -22,9 +21,16 @@ const seedResults = [
     aiMode: "No AI Please",
     resultType: "No AI Please",
     connections: [],
+    originalAiMode: "No AI Please",
+    originalResultType: "No AI Please",
+    originalConnections: [],
+    convertedFromNeedsAi: false,
+    convertedAt: "",
+    updatedAt: "",
     aiText: "",
     readingGuide: "",
     resource: "",
+    imagePath: "",
     imageData: "",
     applause: 18,
     featured: true,
@@ -42,53 +48,20 @@ const seedResults = [
     aiMode: "With AI",
     resultType: "Needs AI Help",
     connections: ["Translate", "Explain"],
+    originalAiMode: "With AI",
+    originalResultType: "Needs AI Help",
+    originalConnections: ["Translate", "Explain"],
+    convertedFromNeedsAi: false,
+    convertedAt: "",
+    updatedAt: "",
     aiText: "Requested AI help: translate the proverb, preserve key cultural terms, explain the meaning, and suggest a reflection prompt for younger family members.",
     readingGuide: "Speaking guide: say the key phrase slowly first, then repeat it in two natural rhythm groups.",
     resource: "",
+    imagePath: "",
     imageData: "",
     applause: 16,
     featured: true,
     createdAt: "2026-05-01T05:10:00.000Z"
-  },
-  {
-    id: "v2-seed-ai-assisted-festival",
-    title: "Lantern festival memory",
-    category: "Festival",
-    heritage: "Seasonal celebration",
-    originCulture: "Chinese diaspora",
-    author: "ERG member",
-    webinarConsent: "Yes",
-    source: "A childhood memory of lanterns, riddles, family walks, and sweets shared after dinner.",
-    aiMode: "With AI",
-    resultType: "AI-Assisted Result",
-    connections: ["Explain"],
-    aiText: "AI-assisted result: a concise cultural explainer connecting light, reunion, riddles, and shared sweets for teammates who may be new to the festival.",
-    readingGuide: "",
-    resource: "",
-    imageData: "",
-    applause: 13,
-    featured: false,
-    createdAt: "2026-05-01T05:14:00.000Z"
-  },
-  {
-    id: "v2-seed-ai-help-recipe",
-    title: "Auntie's festival noodles",
-    category: "Recipe",
-    heritage: "Food archive",
-    originCulture: "South Asian family tradition",
-    author: "Recipe circle",
-    webinarConsent: "Maybe",
-    source: "A recipe remembered by taste: wheat noodles, scallions, sesame oil, family shortcuts, and the story of when it is served.",
-    aiMode: "With AI",
-    resultType: "Needs AI Help",
-    connections: ["Explain"],
-    aiText: "Requested AI help: organize this memory into a recipe card with ingredients, approximate measurements, substitutions, serving occasion, and family notes.",
-    readingGuide: "",
-    resource: "",
-    imageData: "",
-    applause: 15,
-    featured: false,
-    createdAt: "2026-05-01T05:18:00.000Z"
   },
   {
     id: "v2-seed-ai-image-art",
@@ -102,37 +75,24 @@ const seedResults = [
     aiMode: "With AI",
     resultType: "AI-Assisted Result",
     connections: ["AI Image", "Explain"],
+    originalAiMode: "With AI",
+    originalResultType: "AI-Assisted Result",
+    originalConnections: ["AI Image", "Explain"],
+    convertedFromNeedsAi: false,
+    convertedAt: "",
+    updatedAt: "",
     aiText: "AI-assisted result: an image prompt using member-approved symbols, layered textile borders, warm family portrait composition, and respectful cultural guardrails.",
     readingGuide: "",
     resource: "assets/aapi-ai-showcase.png",
+    imagePath: "",
     imageData: "",
     applause: 12,
     featured: false,
     createdAt: "2026-05-01T05:22:00.000Z"
-  },
-  {
-    id: "v2-seed-name-translation",
-    title: "The meaning of my name",
-    category: "Memory",
-    heritage: "Language and identity",
-    originCulture: "Multilingual AAPI identity",
-    author: "ERG member",
-    webinarConsent: "Maybe",
-    source: "A member shares the meaning of their name and the parts coworkers often mispronounce.",
-    aiMode: "With AI",
-    resultType: "AI-Assisted Result",
-    connections: ["Translate"],
-    aiText: "AI-assisted result: an explanation of the name's meaning, original spelling, and a respectful note to ask the person how they prefer to say it.",
-    readingGuide: "Mai-LIN, emphasis on the second syllable. Practice slowly, then at conversational speed.",
-    resource: "",
-    imageData: "",
-    applause: 10,
-    featured: false,
-    createdAt: "2026-05-01T05:26:00.000Z"
   }
 ];
 
-let results = loadResults();
+let results = [];
 let activeFilter = "All";
 let editingId = null;
 let favoriteIds = loadFavorites();
@@ -158,56 +118,20 @@ form.addEventListener("change", (event) => {
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
-  const formData = new FormData(form);
-  const aiMode = formData.get("aiMode");
-  const isNoAi = aiMode === "No AI Please";
-  const source = formData.get("source").trim();
-  const aiText = formData.get("aiText").trim();
-  const readingGuide = formData.get("readingGuide").trim();
-  const imageFile = formData.get("imageFile");
-  const imageData = imageFile && imageFile.size ? await fileToDataUrl(imageFile) : "";
-  const connections = isNoAi ? [] : normalizeConnections(formData.getAll("connections"));
-  const resultType = isNoAi ? "No AI Please" : formData.get("aiStatus");
+  const payload = buildSubmissionPayload();
+  const method = editingId ? "PATCH" : "POST";
+  const path = editingId ? `/showcase/${editingId}` : "/showcase";
 
-  const existingResult = editingId ? results.find((entry) => entry.id === editingId) : null;
-  const now = new Date().toISOString();
-  const originalAiMode = existingResult?.originalAiMode || existingResult?.aiMode || aiMode;
-  const originalResultType = existingResult?.originalResultType || existingResult?.resultType || resultType;
-  const originalConnections = existingResult?.originalConnections || existingResult?.connections || connections;
-  const convertedFromNeedsAi = Boolean(existingResult?.convertedFromNeedsAi || (originalResultType === "Needs AI Help" && resultType === "AI-Assisted Result"));
-  const result = {
-    id: editingId || crypto.randomUUID(),
-    title: formData.get("title").trim(),
-    category: formData.get("category"),
-    heritage: formData.get("heritage").trim() || "Shared heritage",
-    originCulture: formData.get("originCulture").trim() || "Not specified",
-    author: formData.get("author").trim() || "Anonymous",
-    webinarConsent: formData.get("webinarConsent"),
-    source,
-    aiMode,
-    resultType,
-    connections,
-    originalAiMode,
-    originalResultType,
-    originalConnections,
-    convertedFromNeedsAi,
-    convertedAt: existingResult?.convertedAt || (convertedFromNeedsAi ? now : ""),
-    updatedAt: editingId ? now : existingResult?.updatedAt || "",
-    aiText: isNoAi ? "" : aiText || buildOutput(resultType, connections, source),
-    readingGuide,
-    resource: formData.get("resource").trim(),
-    imageData: imageData || existingResult?.imageData || "",
-    applause: existingResult?.applause || 0,
-    featured: existingResult?.featured || false,
-    createdAt: existingResult?.createdAt || now
-  };
-
-  results = editingId ? results.map((entry) => entry.id === editingId ? result : entry) : [result, ...results];
-  saveResults();
-  resetFormState();
-  activeFilter = "All";
-  updateFilterButtons();
-  render();
+  try {
+    await apiRequest(path, { method, body: payload });
+    results = await loadResults();
+    resetFormState();
+    activeFilter = "All";
+    updateFilterButtons();
+    render();
+  } catch (error) {
+    window.alert(error.message);
+  }
 });
 
 cancelEditButton.addEventListener("click", resetFormState);
@@ -231,34 +155,81 @@ exportButton.addEventListener("click", () => {
   URL.revokeObjectURL(url);
 });
 
-clearButton.addEventListener("click", () => {
-  const shouldClear = window.confirm("Clear locally saved v2 submissions and restore starter examples?");
+clearButton.addEventListener("click", async () => {
+  const shouldClear = window.confirm("Restore the shared showcase to starter examples? This affects everyone using the live site.");
   if (!shouldClear) return;
-  results = [...seedResults];
-  saveResults();
-  activeFilter = "All";
-  updateFilterButtons();
-  render();
+  try {
+    results = await apiRequest("/showcase/reset", { method: "POST" });
+    activeFilter = "All";
+    updateFilterButtons();
+    render();
+  } catch (error) {
+    window.alert(error.message);
+  }
 });
 
-function loadResults() {
-  const stored = localStorage.getItem(STORAGE_KEY);
-  if (!stored) return [...seedResults];
+function buildSubmissionPayload() {
+  const formData = new FormData(form);
+  const aiMode = formData.get("aiMode");
+  const isNoAi = aiMode === "No AI Please";
+  const resultType = isNoAi ? "No AI Please" : formData.get("aiStatus");
+  const connections = isNoAi ? [] : normalizeConnections(formData.getAll("connections"));
+  const existingResult = editingId ? results.find((entry) => entry.id === editingId) : null;
 
+  formData.set("aiMode", aiMode);
+  formData.set("resultType", resultType);
+  formData.delete("aiStatus");
+  formData.delete("connections");
+  connections.forEach((connection) => formData.append("connections", connection));
+
+  if (isNoAi) {
+    formData.set("aiText", "");
+  } else if (!formData.get("aiText").trim()) {
+    formData.set("aiText", buildOutput(resultType, connections, formData.get("source").trim()));
+  }
+
+  if (existingResult) {
+    formData.set("originalAiMode", existingResult.originalAiMode || existingResult.aiMode || aiMode);
+    formData.set("originalResultType", existingResult.originalResultType || existingResult.resultType || resultType);
+    (existingResult.originalConnections || existingResult.connections || connections).forEach((connection) => {
+      formData.append("originalConnections", connection);
+    });
+    formData.set("convertedFromNeedsAi", String(Boolean(existingResult.convertedFromNeedsAi || ((existingResult.originalResultType || existingResult.resultType) === "Needs AI Help" && resultType === "AI-Assisted Result"))));
+    formData.set("convertedAt", existingResult.convertedAt || "");
+    formData.set("createdAt", existingResult.createdAt);
+    formData.set("applause", String(existingResult.applause || 0));
+    formData.set("featured", String(Boolean(existingResult.featured)));
+    formData.set("imagePath", existingResult.imagePath || "");
+  }
+
+  return formData;
+}
+
+async function loadResults() {
+  if (!API_BASE) return [...seedResults];
   try {
-    const parsed = JSON.parse(stored);
-    return Array.isArray(parsed) && parsed.length ? mergeSeedResults(normalizeResults(parsed)) : [...seedResults];
-  } catch {
+    const loadedResults = await apiRequest("/showcase");
+    return Array.isArray(loadedResults) ? normalizeResults(loadedResults) : [...seedResults];
+  } catch (error) {
+    console.warn(error);
     return [...seedResults];
   }
 }
 
-function saveResults() {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(results));
-  } catch {
-    window.alert("This browser could not save the image locally. Try using an image link or a smaller image file.");
+async function apiRequest(path, options = {}) {
+  const response = await fetch(`${API_BASE}${path}`, options);
+  if (!response.ok) {
+    let message = "The live showcase could not complete that request.";
+    try {
+      const body = await response.json();
+      message = body.error || message;
+    } catch {
+      // Keep the fallback message.
+    }
+    throw new Error(message);
   }
+  if (response.status === 204) return null;
+  return response.json();
 }
 
 function loadFavorites() {
@@ -275,30 +246,29 @@ function saveFavorites() {
 }
 
 function normalizeResults(storedResults) {
-  return storedResults
-    .filter((entry) => !DEPRECATED_SEED_IDS.has(entry.id))
-    .map((entry) => {
-      const normalizedType = normalizeShareType(entry);
-      const isNoAi = normalizedType === "No AI Please";
-      const connections = isNoAi ? [] : normalizeConnections(entry.connections?.length ? entry.connections : inferConnections(entry.resultType));
-      return {
-        ...entry,
-        aiMode: isNoAi ? "No AI Please" : "With AI",
-        resultType: normalizedType,
-        connections: isNoAi ? [] : connections,
-        originCulture: entry.originCulture || entry.heritage || "Not specified",
-        webinarConsent: entry.webinarConsent || "Maybe",
-        originalAiMode: entry.originalAiMode || entry.aiMode || (isNoAi ? "No AI Please" : "With AI"),
-        originalResultType: entry.originalResultType || normalizedType,
-        originalConnections: entry.originalConnections || (isNoAi ? [] : connections),
-        convertedFromNeedsAi: Boolean(entry.convertedFromNeedsAi || ((entry.originalResultType || normalizedType) === "Needs AI Help" && normalizedType === "AI-Assisted Result")),
-        convertedAt: entry.convertedAt || "",
-        updatedAt: entry.updatedAt || "",
-        aiText: isNoAi ? "" : entry.aiText || entry.output || buildOutput(normalizedType, connections, entry.source || ""),
-        readingGuide: entry.readingGuide || entry.pronunciation || "",
-        imageData: entry.imageData || ""
-      };
-    });
+  return storedResults.map((entry) => {
+    const normalizedType = normalizeShareType(entry);
+    const isNoAi = normalizedType === "No AI Please";
+    const connections = isNoAi ? [] : normalizeConnections(entry.connections?.length ? entry.connections : inferConnections(entry.resultType));
+    return {
+      ...entry,
+      aiMode: isNoAi ? "No AI Please" : "With AI",
+      resultType: normalizedType,
+      connections: isNoAi ? [] : connections,
+      originCulture: entry.originCulture || entry.heritage || "Not specified",
+      webinarConsent: entry.webinarConsent || "Maybe",
+      originalAiMode: entry.originalAiMode || entry.aiMode || (isNoAi ? "No AI Please" : "With AI"),
+      originalResultType: entry.originalResultType || normalizedType,
+      originalConnections: entry.originalConnections || (isNoAi ? [] : connections),
+      convertedFromNeedsAi: Boolean(entry.convertedFromNeedsAi || ((entry.originalResultType || normalizedType) === "Needs AI Help" && normalizedType === "AI-Assisted Result")),
+      convertedAt: entry.convertedAt || "",
+      updatedAt: entry.updatedAt || "",
+      aiText: isNoAi ? "" : entry.aiText || entry.output || buildOutput(normalizedType, connections, entry.source || ""),
+      readingGuide: entry.readingGuide || entry.pronunciation || "",
+      imagePath: entry.imagePath || "",
+      imageData: entry.imageData || ""
+    };
+  });
 }
 
 function normalizeShareType(entry) {
@@ -320,12 +290,6 @@ function normalizeConnections(connections) {
   return clean.length ? [...new Set(clean)] : ["Translate"];
 }
 
-function mergeSeedResults(storedResults) {
-  const existingIds = new Set(storedResults.map((entry) => entry.id));
-  const missingSeeds = seedResults.filter((entry) => !existingIds.has(entry.id));
-  return [...storedResults, ...missingSeeds];
-}
-
 function render() {
   grid.innerHTML = "";
   const visibleResults = results
@@ -335,7 +299,7 @@ function render() {
   visibleResults.forEach((result) => {
     const card = template.content.firstElementChild.cloneNode(true);
     const isNoAi = result.resultType === "No AI Please";
-    const imageSource = result.imageData || (isImageResource(result.resource) ? result.resource : "");
+    const imageSource = result.imagePath || result.imageData || (isImageResource(result.resource) ? result.resource : "");
     const output = card.querySelector(".ai-output");
 
     card.classList.toggle("is-pinned", favoriteIds.has(result.id));
@@ -381,7 +345,7 @@ function render() {
     featureButton.setAttribute("aria-pressed", String(isFavorite));
     featureButton.addEventListener("click", () => toggleFavorite(result.id));
 
-    voteButton.addEventListener("click", () => updateResult(result.id, { applause: result.applause + 1 }));
+    voteButton.addEventListener("click", () => applaudResult(result.id));
     card.querySelector(".edit-button").addEventListener("click", () => startEdit(result.id));
     card.querySelector(".delete-button").addEventListener("click", () => deleteResult(result.id));
 
@@ -398,19 +362,29 @@ function matchesFilter(result) {
   return result.resultType === activeFilter || result.connections.includes(activeFilter);
 }
 
-function updateResult(id, patch) {
-  results = results.map((result) => result.id === id ? { ...result, ...patch } : result);
-  saveResults();
-  render();
+async function applaudResult(id) {
+  try {
+    const updatedResult = await apiRequest(`/showcase/${id}/applause`, { method: "POST" });
+    results = results.map((result) => result.id === id ? normalizeResults([updatedResult])[0] : result);
+    render();
+  } catch (error) {
+    window.alert(error.message);
+  }
 }
 
-function deleteResult(id) {
-  results = results.filter((result) => result.id !== id);
-  favoriteIds.delete(id);
-  saveFavorites();
-  if (editingId === id) resetFormState();
-  saveResults();
-  render();
+async function deleteResult(id) {
+  const shouldDelete = window.confirm("Remove this submission from the shared showcase?");
+  if (!shouldDelete) return;
+  try {
+    await apiRequest(`/showcase/${id}`, { method: "DELETE" });
+    results = results.filter((result) => result.id !== id);
+    favoriteIds.delete(id);
+    saveFavorites();
+    if (editingId === id) resetFormState();
+    render();
+  } catch (error) {
+    window.alert(error.message);
+  }
 }
 
 function toggleFavorite(id) {
@@ -482,7 +456,7 @@ function resetFormState() {
 function updateStats() {
   submissionCount.textContent = results.length;
   resultCount.textContent = results.filter((result) => result.aiMode === "With AI").length;
-  imageCount.textContent = results.filter((result) => result.imageData || isImageResource(result.resource)).length;
+  imageCount.textContent = results.filter((result) => result.imagePath || result.imageData || isImageResource(result.resource)).length;
 }
 
 function updateFilterButtons() {
@@ -511,17 +485,8 @@ function isImageResource(resource) {
   return /\.(png|jpe?g|gif|webp|avif|svg)(\?.*)?$/i.test(resource || "");
 }
 
-function fileToDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.addEventListener("load", () => resolve(reader.result));
-    reader.addEventListener("error", reject);
-    reader.readAsDataURL(file);
-  });
-}
-
 function toCsv(rows) {
-  const headers = ["Title", "Submission Type", "Heritage Focus", "Originated Culture Or Region", "Member", "Webinar Sharing Consent", "Source", "Original Mode", "Original Status", "Original AI Connections", "Current Mode", "Current Status", "Current AI Connections", "Converted From Needs AI", "Converted At", "Updated At", "AI Text", "How To Speak It", "Resource", "Has Image", "Applause", "Featured", "Created At"];
+  const headers = ["Title", "Submission Type", "Heritage Focus", "Originated Culture Or Region", "Member", "Webinar Sharing Consent", "Source", "Original Mode", "Original Status", "Original AI Connections", "Current Mode", "Current Status", "Current AI Connections", "Converted From Needs AI", "Converted At", "Updated At", "AI Text", "How To Speak It", "Resource", "Image Path", "Has Image", "Applause", "Featured", "Created At"];
   const values = rows.map((result) => [
     result.title,
     result.category,
@@ -542,7 +507,8 @@ function toCsv(rows) {
     result.aiText,
     result.readingGuide,
     result.resource,
-    result.imageData || isImageResource(result.resource) ? "Yes" : "No",
+    result.imagePath || "",
+    result.imagePath || result.imageData || isImageResource(result.resource) ? "Yes" : "No",
     result.applause,
     result.featured ? "Yes" : "No",
     result.createdAt
@@ -553,5 +519,10 @@ function toCsv(rows) {
     .join("\n");
 }
 
-updateModePanels();
-render();
+async function initialize() {
+  updateModePanels();
+  results = await loadResults();
+  render();
+}
+
+initialize();

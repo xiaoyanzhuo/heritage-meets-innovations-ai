@@ -1,0 +1,92 @@
+[
+  {
+    "id": "v2-seed-no-ai-legacy",
+    "title": "Why we keep this story unchanged",
+    "category": "Story",
+    "heritage": "Family legacy",
+    "originCulture": "AAPI diaspora",
+    "author": "Member reflection",
+    "webinarConsent": "Maybe",
+    "source": "A member shares a family migration story and asks that it be heard in their own words before any AI transformation is considered.",
+    "aiMode": "No AI Please",
+    "resultType": "No AI Please",
+    "connections": [],
+    "originalAiMode": "No AI Please",
+    "originalResultType": "No AI Please",
+    "originalConnections": [],
+    "convertedFromNeedsAi": false,
+    "convertedAt": "",
+    "updatedAt": "",
+    "aiText": "",
+    "readingGuide": "",
+    "resource": "",
+    "imagePath": "",
+    "applause": 18,
+    "featured": true,
+    "createdAt": "2026-05-01T05:06:00+00:00"
+  },
+  {
+    "id": "v2-seed-ai-help-proverb",
+    "title": "Grandmother's patience proverb",
+    "category": "Proverb",
+    "heritage": "Family wisdom",
+    "originCulture": "East Asian family tradition",
+    "author": "Language table",
+    "webinarConsent": "Yes",
+    "source": "A short family proverb about how patient work turns into lasting harvest.",
+    "aiMode": "With AI",
+    "resultType": "Needs AI Help",
+    "connections": [
+      "Translate",
+      "Explain"
+    ],
+    "originalAiMode": "With AI",
+    "originalResultType": "Needs AI Help",
+    "originalConnections": [
+      "Translate",
+      "Explain"
+    ],
+    "convertedFromNeedsAi": false,
+    "convertedAt": "",
+    "updatedAt": "",
+    "aiText": "Requested AI help: translate the proverb, preserve key cultural terms, explain the meaning, and suggest a reflection prompt for younger family members.",
+    "readingGuide": "Speaking guide: say the key phrase slowly first, then repeat it in two natural rhythm groups.",
+    "resource": "",
+    "imagePath": "",
+    "applause": 16,
+    "featured": true,
+    "createdAt": "2026-05-01T05:10:00+00:00"
+  },
+  {
+    "id": "v2-seed-ai-image-art",
+    "title": "Textile pattern portrait",
+    "category": "Art",
+    "heritage": "Visual arts",
+    "originCulture": "Pacific and Southeast Asian inspired",
+    "author": "Creative guild",
+    "webinarConsent": "Yes",
+    "source": "A member describes fabric borders, mountain colors, jasmine flowers, and a portrait of three generations.",
+    "aiMode": "With AI",
+    "resultType": "AI-Assisted Result",
+    "connections": [
+      "AI Image",
+      "Explain"
+    ],
+    "originalAiMode": "With AI",
+    "originalResultType": "AI-Assisted Result",
+    "originalConnections": [
+      "AI Image",
+      "Explain"
+    ],
+    "convertedFromNeedsAi": false,
+    "convertedAt": "",
+    "updatedAt": "",
+    "aiText": "AI-assisted result: an image prompt using member-approved symbols, layered textile borders, warm family portrait composition, and respectful cultural guardrails.",
+    "readingGuide": "",
+    "resource": "assets/aapi-ai-showcase.png",
+    "imagePath": "",
+    "applause": 12,
+    "featured": false,
+    "createdAt": "2026-05-01T05:22:00+00:00"
+  }
+]

@@ -1,1 +1,1 @@
-streamlit>=1.32
+# No third-party Python packages are required for the live static app backend.

@@ -1,0 +1,32 @@
+[
+  {
+    "id": "seed-heritage",
+    "title": "Heritage language story helper",
+    "description": "Families submit proverbs, recipes, or elder stories and get bilingual summaries, pronunciation help, and classroom-friendly prompts.",
+    "category": "Culture & Heritage",
+    "author": "AAPIN",
+    "stage": "Ready to test",
+    "votes": 12,
+    "createdAt": "2026-05-01T04:00:00+00:00"
+  },
+  {
+    "id": "seed-care",
+    "title": "Resource navigator for new arrivals",
+    "description": "A multilingual assistant that explains local services, school forms, health resources, and community events in plain language.",
+    "category": "Access & Language",
+    "author": "Community care pod",
+    "stage": "Needs partners",
+    "votes": 9,
+    "createdAt": "2026-05-01T04:05:00+00:00"
+  },
+  {
+    "id": "seed-business",
+    "title": "Small business menu and flyer studio",
+    "description": "Help neighborhood restaurants and shops translate menus, create event flyers, and test social posts while keeping their voice.",
+    "category": "Small Business",
+    "author": "ERG member",
+    "stage": "Spark",
+    "votes": 7,
+    "createdAt": "2026-05-01T04:10:00+00:00"
+  }
+]
