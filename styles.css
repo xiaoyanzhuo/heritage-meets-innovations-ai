@@ -129,9 +129,14 @@ h1 {
 }
 
 .idea-hero h1 {
-  max-width: 13ch;
-  font-size: clamp(2.05rem, 4.35vw, 3.65rem);
-  line-height: 1.02;
+  max-width: none;
+  font-size: 2.9rem;
+  line-height: 1.04;
+}
+
+.idea-hero h1 span {
+  display: block;
+  white-space: nowrap;
 }
 
 .lede {
@@ -616,12 +621,21 @@ svg {
     max-width: 9ch;
   }
 
+  .idea-hero h1 {
+    max-width: none;
+    font-size: 2.25rem;
+  }
+
   .submit-panel {
     position: static;
   }
 }
 
 @media (max-width: 560px) {
+  .idea-hero h1 {
+    font-size: 1.9rem;
+  }
+
   .form-grid,
   .segmented {
     grid-template-columns: 1fr;
