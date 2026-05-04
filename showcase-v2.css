@@ -251,17 +251,12 @@
   display: grid;
   gap: 12px;
   min-height: 170px;
-  border: 10px solid #fff8ea;
+  border: 1px solid rgba(16, 34, 74, 0.12);
   border-radius: 8px;
-  padding: 12px;
+  padding: 14px;
   background:
-    linear-gradient(135deg, rgba(120, 76, 34, 0.34), rgba(229, 154, 40, 0.18)) border-box,
     radial-gradient(circle at top left, rgba(229, 154, 40, 0.18), transparent 12rem),
     linear-gradient(135deg, rgba(8, 120, 138, 0.08), rgba(111, 44, 143, 0.08));
-  box-shadow:
-    inset 0 0 0 1px rgba(120, 76, 34, 0.25),
-    inset 0 0 0 8px rgba(255, 253, 248, 0.82),
-    0 10px 22px rgba(16, 34, 74, 0.1);
 }
 
 .result-image {
