@@ -137,9 +137,13 @@
           </label>
 
           <label>
-            Upload image
-            <input name="imageFile" type="file" accept="image/*">
+            Upload images
+            <input name="imageFile" type="file" accept="image/*" multiple>
           </label>
+          <div class="cover-picker is-hidden" id="coverPicker" aria-live="polite">
+            <p class="field-hint">Choose a cover image for the gallery card.</p>
+            <div class="cover-picker__grid" id="coverPickerGrid"></div>
+          </div>
 
           <label>
             Image or document link
@@ -243,8 +247,15 @@
       </button>
       <div class="result-viewer__content">
         <div class="result-viewer__media">
+          <button class="icon-button result-viewer__nav result-viewer__nav--prev" id="viewerPrevButton" type="button" aria-label="Previous image" title="Previous image">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg>
+          </button>
           <img id="viewerImage" alt="">
+          <button class="icon-button result-viewer__nav result-viewer__nav--next" id="viewerNextButton" type="button" aria-label="Next image" title="Next image">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+          </button>
         </div>
+        <div class="result-viewer__thumbs" id="viewerThumbs" aria-label="Image choices"></div>
         <div class="result-viewer__details">
           <div class="result-card__header">
             <span class="result-type" id="viewerType"></span>

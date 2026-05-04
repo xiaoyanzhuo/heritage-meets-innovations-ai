@@ -97,6 +97,8 @@ let results = [];
 let activeFilter = "All";
 let editingId = null;
 let favoriteIds = loadFavorites();
+let currentViewerImages = [];
+let currentViewerIndex = 0;
 
 const form = document.querySelector("#studioForm");
 const grid = document.querySelector("#resultsGrid");
@@ -126,9 +128,15 @@ const viewerAiText = document.querySelector("#viewerAiText");
 const viewerReading = document.querySelector("#viewerReading");
 const viewerSource = document.querySelector("#viewerSource");
 const viewerResource = document.querySelector("#viewerResource");
+const viewerPrevButton = document.querySelector("#viewerPrevButton");
+const viewerNextButton = document.querySelector("#viewerNextButton");
+const viewerThumbs = document.querySelector("#viewerThumbs");
+const coverPicker = document.querySelector("#coverPicker");
+const coverPickerGrid = document.querySelector("#coverPickerGrid");
 
 form.addEventListener("change", (event) => {
   if (event.target.name === "aiMode") updateModePanels();
+  if (event.target.name === "imageFile") renderCoverPicker();
 });
 
 form.addEventListener("submit", async (event) => {
@@ -154,6 +162,8 @@ cancelEditButton.addEventListener("click", resetFormState);
 showcaseFullViewButton.addEventListener("click", () => setShowcaseView("full"));
 showcaseGalleryOnlyButton.addEventListener("click", () => setShowcaseView("gallery"));
 viewerCloseButton.addEventListener("click", closeResultViewer);
+viewerPrevButton.addEventListener("click", () => showViewerImage(currentViewerIndex - 1));
+viewerNextButton.addEventListener("click", () => showViewerImage(currentViewerIndex + 1));
 resultViewer.addEventListener("click", (event) => {
   if (event.target === resultViewer) closeResultViewer();
 });
@@ -222,6 +232,8 @@ function buildSubmissionPayload() {
     formData.set("applause", String(existingResult.applause || 0));
     formData.set("featured", String(Boolean(existingResult.featured)));
     formData.set("imagePath", existingResult.imagePath || "");
+    (existingResult.imagePaths || []).forEach((imagePath) => formData.append("imagePaths", imagePath));
+    formData.set("coverImagePath", existingResult.coverImagePath || existingResult.imagePath || "");
   }
 
   return formData;
@@ -310,10 +322,19 @@ function normalizeResults(storedResults) {
       updatedAt: entry.updatedAt || "",
       aiText: isNoAi ? "" : entry.aiText || entry.output || buildOutput(normalizedType, connections, entry.source || ""),
       readingGuide: entry.readingGuide || entry.pronunciation || "",
-      imagePath: entry.imagePath || "",
+      imagePaths: normalizeImagePaths(entry),
+      coverImagePath: entry.coverImagePath || entry.imagePath || "",
+      imagePath: entry.coverImagePath || entry.imagePath || normalizeImagePaths(entry)[0] || "",
       imageData: entry.imageData || ""
     };
   });
+}
+
+function normalizeImagePaths(entry) {
+  const paths = Array.isArray(entry.imagePaths) ? [...entry.imagePaths] : [];
+  if (entry.imagePath && !paths.includes(entry.imagePath)) paths.unshift(entry.imagePath);
+  if (entry.coverImagePath && !paths.includes(entry.coverImagePath)) paths.unshift(entry.coverImagePath);
+  return [...new Set(paths.filter(Boolean))];
 }
 
 function normalizeShareType(entry) {
@@ -344,7 +365,8 @@ function render() {
   visibleResults.forEach((result) => {
     const card = template.content.firstElementChild.cloneNode(true);
     const isNoAi = result.resultType === "No AI Please";
-    const imageSource = result.imagePath || result.imageData || (isImageResource(result.resource) ? result.resource : "");
+    const imageSources = getImageSources(result);
+    const imageSource = result.coverImagePath || result.imagePath || imageSources[0] || "";
     const output = card.querySelector(".ai-output");
 
     card.classList.toggle("is-pinned", favoriteIds.has(result.id));
@@ -470,12 +492,22 @@ function renderFavorites() {
   });
 }
 
+function getImageSources(result) {
+  const sources = Array.isArray(result.imagePaths) ? [...result.imagePaths] : [];
+  if (result.imagePath) sources.unshift(result.imagePath);
+  if (result.coverImagePath) sources.unshift(result.coverImagePath);
+  if (result.imageData) sources.push(result.imageData);
+  if (isImageResource(result.resource)) sources.push(result.resource);
+  return [...new Set(sources.filter(Boolean))];
+}
+
 function openResultViewer(id) {
   const result = results.find((entry) => entry.id === id);
   if (!result) return;
 
   const isNoAi = result.resultType === "No AI Please";
-  const imageSource = result.imagePath || result.imageData || (isImageResource(result.resource) ? result.resource : "");
+  currentViewerImages = getImageSources(result);
+  currentViewerIndex = Math.max(0, currentViewerImages.indexOf(result.coverImagePath || result.imagePath));
   const media = resultViewer.querySelector(".result-viewer__media");
 
   viewerType.textContent = SHARE_LABELS[result.resultType] || result.resultType;
@@ -485,14 +517,14 @@ function openResultViewer(id) {
   viewerMeta.textContent = `${result.author} · ${result.originCulture || result.heritage} · ${result.connections.length ? result.connections.join(" + ") : "Source only"}`;
   viewerSource.textContent = result.source;
 
-  if (imageSource) {
-    viewerImage.src = imageSource;
-    viewerImage.alt = isNoAi ? `${result.title} source image` : `${result.title} shared image`;
+  if (currentViewerImages.length) {
     media.classList.remove("is-hidden");
+    showViewerImage(currentViewerIndex, result.title, isNoAi);
   } else {
     viewerImage.removeAttribute("src");
     viewerImage.alt = "";
     media.classList.add("is-hidden");
+    viewerThumbs.classList.add("is-hidden");
   }
 
   viewerAiText.textContent = isNoAi ? "No-AI share: source preserved without AI transformation." : result.aiText;
@@ -521,7 +553,33 @@ function openResultViewer(id) {
   }
 }
 
+function showViewerImage(index, title = viewerTitle.textContent, isNoAi = viewerType.dataset.type === "No AI Please") {
+  if (!currentViewerImages.length) return;
+  currentViewerIndex = (index + currentViewerImages.length) % currentViewerImages.length;
+  viewerImage.src = currentViewerImages[currentViewerIndex];
+  viewerImage.alt = isNoAi ? `${title} source image ${currentViewerIndex + 1}` : `${title} shared image ${currentViewerIndex + 1}`;
+  const hasMultiple = currentViewerImages.length > 1;
+  viewerPrevButton.classList.toggle("is-hidden", !hasMultiple);
+  viewerNextButton.classList.toggle("is-hidden", !hasMultiple);
+  viewerThumbs.classList.toggle("is-hidden", !hasMultiple);
+  viewerThumbs.innerHTML = "";
+  currentViewerImages.forEach((imageSource, imageIndex) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = imageIndex === currentViewerIndex ? "is-active" : "";
+    button.setAttribute("aria-label", `Show image ${imageIndex + 1}`);
+    const image = document.createElement("img");
+    image.src = imageSource;
+    image.alt = "";
+    button.append(image);
+    button.addEventListener("click", () => showViewerImage(imageIndex, title, isNoAi));
+    viewerThumbs.append(button);
+  });
+}
+
 function closeResultViewer() {
+  currentViewerImages = [];
+  currentViewerIndex = 0;
   if (typeof resultViewer.close === "function") {
     resultViewer.close();
   } else {
@@ -545,6 +603,7 @@ function startEdit(id) {
   form.elements.namedItem("aiText").value = result.aiText;
   form.elements.namedItem("readingGuide").value = result.readingGuide;
   form.elements.namedItem("imageFile").value = "";
+  renderCoverPicker();
   form.querySelector(`input[name="aiMode"][value="${result.aiMode}"]`).checked = true;
 
   if (result.aiMode === "With AI") {
@@ -564,6 +623,7 @@ function startEdit(id) {
 function resetFormState() {
   editingId = null;
   form.reset();
+  renderCoverPicker();
   form.querySelector('input[name="aiMode"][value="With AI"]').checked = true;
   form.querySelector('input[name="aiStatus"][value="Needs AI Help"]').checked = true;
   form.querySelector('input[name="connections"][value="Translate"]').checked = true;
@@ -572,10 +632,33 @@ function resetFormState() {
   cancelEditButton.classList.add("is-hidden");
 }
 
+function renderCoverPicker() {
+  const files = [...form.elements.namedItem("imageFile").files || []].filter((file) => file.type.startsWith("image/"));
+  coverPickerGrid.innerHTML = "";
+  coverPicker.classList.toggle("is-hidden", files.length < 2);
+
+  files.forEach((file, index) => {
+    const label = document.createElement("label");
+    const radio = document.createElement("input");
+    const image = document.createElement("img");
+    const name = document.createElement("span");
+    radio.type = "radio";
+    radio.name = "coverImageName";
+    radio.value = file.name;
+    radio.checked = index === 0;
+    image.src = URL.createObjectURL(file);
+    image.alt = `${file.name} preview`;
+    image.addEventListener("load", () => URL.revokeObjectURL(image.src), { once: true });
+    name.textContent = file.name;
+    label.append(radio, image, name);
+    coverPickerGrid.append(label);
+  });
+}
+
 function updateStats() {
   submissionCount.textContent = results.length;
   resultCount.textContent = results.filter((result) => result.aiMode === "With AI").length;
-  imageCount.textContent = results.filter((result) => result.imagePath || result.imageData || isImageResource(result.resource)).length;
+  imageCount.textContent = results.filter((result) => getImageSources(result).length).length;
 }
 
 function updateFilterButtons() {
@@ -605,7 +688,7 @@ function isImageResource(resource) {
 }
 
 function toCsv(rows) {
-  const headers = ["Title", "Submission Type", "Heritage Focus", "Originated Culture Or Region", "Member", "Webinar Sharing Consent", "Source", "Original Mode", "Original Status", "Original AI Connections", "Current Mode", "Current Status", "Current AI Connections", "Converted From Needs AI", "Converted At", "Updated At", "AI Text", "How To Speak It", "Resource", "Image Path", "Has Image", "Applause", "Featured", "Created At"];
+  const headers = ["Title", "Submission Type", "Heritage Focus", "Originated Culture Or Region", "Member", "Webinar Sharing Consent", "Source", "Original Mode", "Original Status", "Original AI Connections", "Current Mode", "Current Status", "Current AI Connections", "Converted From Needs AI", "Converted At", "Updated At", "AI Text", "How To Speak It", "Resource", "Cover Image", "All Images", "Has Image", "Applause", "Featured", "Created At"];
   const values = rows.map((result) => [
     result.title,
     result.category,
@@ -626,8 +709,9 @@ function toCsv(rows) {
     result.aiText,
     result.readingGuide,
     result.resource,
-    result.imagePath || "",
-    result.imagePath || result.imageData || isImageResource(result.resource) ? "Yes" : "No",
+    result.coverImagePath || result.imagePath || "",
+    getImageSources(result).join(" | "),
+    getImageSources(result).length ? "Yes" : "No",
     result.applause,
     result.featured ? "Yes" : "No",
     result.createdAt

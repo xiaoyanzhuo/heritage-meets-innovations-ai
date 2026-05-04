@@ -50,6 +50,8 @@ SHOWCASE_FIELDS = (
     "readingGuide",
     "resource",
     "imagePath",
+    "imagePaths",
+    "coverImagePath",
     "applause",
     "featured",
     "createdAt",
@@ -111,6 +113,8 @@ def init_db() -> None:
               reading_guide TEXT NOT NULL DEFAULT '',
               resource TEXT NOT NULL DEFAULT '',
               image_path TEXT NOT NULL DEFAULT '',
+              image_paths TEXT NOT NULL DEFAULT '[]',
+              cover_image_path TEXT NOT NULL DEFAULT '',
               applause INTEGER NOT NULL DEFAULT 0,
               featured INTEGER NOT NULL DEFAULT 0,
               owner_id TEXT NOT NULL DEFAULT '',
@@ -126,6 +130,8 @@ def init_db() -> None:
         ensure_column(conn, "showcase", "owner_id", "TEXT NOT NULL DEFAULT ''")
         ensure_column(conn, "showcase", "deleted_at", "TEXT NOT NULL DEFAULT ''")
         ensure_column(conn, "showcase", "deleted_by", "TEXT NOT NULL DEFAULT ''")
+        ensure_column(conn, "showcase", "image_paths", "TEXT NOT NULL DEFAULT '[]'")
+        ensure_column(conn, "showcase", "cover_image_path", "TEXT NOT NULL DEFAULT ''")
         seed_if_empty(conn, "ideas", DATA_DIR / "ideas.json", upsert_idea)
         seed_if_empty(conn, "showcase", DATA_DIR / "showcase.json", upsert_showcase)
 
@@ -167,6 +173,12 @@ def row_to_idea(row: sqlite3.Row, client_id: str = "", include_deleted: bool = F
 
 
 def row_to_showcase(row: sqlite3.Row, client_id: str = "", include_deleted: bool = False, include_owner: bool = False) -> dict:
+    image_paths = clean_list(row["image_paths"]) if "image_paths" in row.keys() else []
+    if row["image_path"] and row["image_path"] not in image_paths:
+        image_paths = [row["image_path"], *image_paths]
+    cover_image_path = row["cover_image_path"] if "cover_image_path" in row.keys() else ""
+    if not cover_image_path and image_paths:
+        cover_image_path = image_paths[0]
     item = {
         "id": row["id"],
         "title": row["title"],
@@ -188,7 +200,9 @@ def row_to_showcase(row: sqlite3.Row, client_id: str = "", include_deleted: bool
         "aiText": row["ai_text"],
         "readingGuide": row["reading_guide"],
         "resource": row["resource"],
-        "imagePath": row["image_path"],
+        "imagePath": cover_image_path or row["image_path"],
+        "imagePaths": image_paths,
+        "coverImagePath": cover_image_path,
         "imageData": "",
         "applause": row["applause"],
         "featured": bool(row["featured"]),
@@ -258,6 +272,22 @@ def normalize_showcase(payload: dict, existing: dict | None = None) -> dict:
     converted = clean_bool(payload.get("convertedFromNeedsAi"), existing.get("convertedFromNeedsAi", False))
     if original_result_type == "Needs AI Help" and result_type == "AI-Assisted Result":
         converted = True
+    existing_images = clean_list(existing.get("imagePaths", []))
+    if existing.get("imagePath") and existing["imagePath"] not in existing_images:
+        existing_images = [existing["imagePath"], *existing_images]
+    incoming_images = clean_list(payload.get("imagePaths", []))
+    image_paths = [*existing_images]
+    for image_path in incoming_images:
+        if image_path not in image_paths:
+            image_paths.append(image_path)
+    single_image_path = clean_text(payload.get("imagePath"), existing.get("imagePath", ""))
+    if single_image_path and single_image_path not in image_paths:
+        image_paths.insert(0, single_image_path)
+    cover_image_path = clean_text(payload.get("coverImagePath"), existing.get("coverImagePath", ""))
+    if not cover_image_path and image_paths:
+        cover_image_path = image_paths[0]
+    if cover_image_path and cover_image_path not in image_paths:
+        image_paths.insert(0, cover_image_path)
     return {
         "id": clean_text(payload.get("id"), existing.get("id") or str(uuid.uuid4())),
         "title": clean_text(payload.get("title"), existing.get("title", "")),
@@ -279,7 +309,9 @@ def normalize_showcase(payload: dict, existing: dict | None = None) -> dict:
         "aiText": "" if ai_mode == "No AI Please" else clean_text(payload.get("aiText"), existing.get("aiText", "")),
         "readingGuide": clean_text(payload.get("readingGuide"), existing.get("readingGuide", "")),
         "resource": clean_text(payload.get("resource"), existing.get("resource", "")),
-        "imagePath": clean_text(payload.get("imagePath"), existing.get("imagePath", "")),
+        "imagePath": cover_image_path or (image_paths[0] if image_paths else ""),
+        "imagePaths": image_paths,
+        "coverImagePath": cover_image_path,
         "applause": int(payload.get("applause", existing.get("applause", 0)) or 0),
         "featured": clean_bool(payload.get("featured"), existing.get("featured", False)),
         "ownerId": clean_text(payload.get("ownerId"), existing.get("ownerId", "")),
@@ -314,15 +346,15 @@ def upsert_showcase(conn: sqlite3.Connection, payload: dict, existing: dict | No
           id, title, category, heritage, origin_culture, author, webinar_consent, source,
           ai_mode, result_type, connections, original_ai_mode, original_result_type,
           original_connections, converted_from_needs_ai, converted_at, updated_at,
-          ai_text, reading_guide, resource, image_path, applause, featured, owner_id,
-          deleted_at, deleted_by, created_at
+          ai_text, reading_guide, resource, image_path, image_paths, cover_image_path,
+          applause, featured, owner_id, deleted_at, deleted_by, created_at
         )
         VALUES (
           :id, :title, :category, :heritage, :originCulture, :author, :webinarConsent, :source,
           :aiMode, :resultType, :connectionsJson, :originalAiMode, :originalResultType,
           :originalConnectionsJson, :convertedFromNeedsAiInt, :convertedAt, :updatedAt,
-          :aiText, :readingGuide, :resource, :imagePath, :applause, :featuredInt,
-          :ownerId, :deletedAt, :deletedBy, :createdAt
+          :aiText, :readingGuide, :resource, :imagePath, :imagePathsJson, :coverImagePath,
+          :applause, :featuredInt, :ownerId, :deletedAt, :deletedBy, :createdAt
         )
         ON CONFLICT(id) DO UPDATE SET
           title=excluded.title, category=excluded.category, heritage=excluded.heritage,
@@ -336,6 +368,7 @@ def upsert_showcase(conn: sqlite3.Connection, payload: dict, existing: dict | No
           converted_at=excluded.converted_at, updated_at=excluded.updated_at,
           ai_text=excluded.ai_text, reading_guide=excluded.reading_guide,
           resource=excluded.resource, image_path=excluded.image_path,
+          image_paths=excluded.image_paths, cover_image_path=excluded.cover_image_path,
           applause=excluded.applause, featured=excluded.featured, owner_id=excluded.owner_id,
           deleted_at=excluded.deleted_at, deleted_by=excluded.deleted_by, created_at=excluded.created_at
         """,
@@ -343,6 +376,7 @@ def upsert_showcase(conn: sqlite3.Connection, payload: dict, existing: dict | No
             **item,
             "connectionsJson": json.dumps(item["connections"]),
             "originalConnectionsJson": json.dumps(item["originalConnections"]),
+            "imagePathsJson": json.dumps(item["imagePaths"]),
             "convertedFromNeedsAiInt": int(item["convertedFromNeedsAi"]),
             "featuredInt": int(item["featured"]),
         },
@@ -462,18 +496,31 @@ class Handler(BaseHTTPRequestHandler):
         if content_type.startswith("multipart/form-data"):
             form = cgi.FieldStorage(fp=self.rfile, headers=self.headers, environ={"REQUEST_METHOD": self.command})
             payload = {}
+            uploaded_images = []
             for key in form.keys():
                 field = form[key]
                 if isinstance(field, list):
-                    payload[key] = [item.value for item in field if not item.filename]
+                    if key == "imageFile":
+                        for item in field:
+                            if item.filename:
+                                uploaded_images.append({"filename": item.filename, "path": save_upload(item)})
+                    else:
+                        payload[key] = [item.value for item in field if not item.filename]
                 elif field.filename:
-                    payload[key] = save_upload(field)
+                    if key == "imageFile":
+                        uploaded_images.append({"filename": field.filename, "path": save_upload(field)})
+                    else:
+                        payload[key] = save_upload(field)
                 else:
                     payload[key] = field.value
             if payload.get("connections") and isinstance(payload["connections"], str):
                 payload["connections"] = [payload["connections"]]
-            if payload.get("imageFile"):
-                payload["imagePath"] = payload.pop("imageFile")
+            if uploaded_images:
+                cover_name = clean_text(payload.get("coverImageName"))
+                payload["imagePaths"] = [item["path"] for item in uploaded_images]
+                cover = next((item["path"] for item in uploaded_images if item["filename"] == cover_name), "")
+                payload["coverImagePath"] = cover or uploaded_images[0]["path"]
+                payload["imagePath"] = payload["coverImagePath"]
             return payload
         return self.parse_json()
 
