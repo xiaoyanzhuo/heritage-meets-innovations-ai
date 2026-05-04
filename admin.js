@@ -94,7 +94,7 @@ function buildAdminCard(item, mode) {
   card.querySelector(".stage").textContent = item.category || item.stage || (isDeleted ? "Deleted" : "Live");
   card.querySelector("h3").textContent = item.title;
   card.querySelector(".idea-copy").textContent = item.description || item.source || "";
-  card.querySelector(".author").textContent = item.author || "Anonymous";
+  card.querySelector(".author").textContent = `${item.author || "Unknown display"} · admin: ${item.submitterName || "not captured"}`;
   card.querySelector(".deleted-at").textContent = isDeleted && item.deletedAt
     ? `Deleted ${new Date(item.deletedAt).toLocaleString()}`
     : `Created ${new Date(item.createdAt).toLocaleString()}`;
@@ -120,7 +120,8 @@ function openAdminEdit(table, id) {
   adminEditForm.elements.namedItem("stage").value = item.stage || "";
   adminEditForm.elements.namedItem("heritage").value = item.heritage || "";
   adminEditForm.elements.namedItem("originCulture").value = item.originCulture || "";
-  adminEditForm.elements.namedItem("author").value = item.author || "";
+  adminEditForm.elements.namedItem("submitterName").value = item.submitterName || item.author || "";
+  adminEditForm.elements.namedItem("displayName").value = item.displayName || item.author || "";
   adminEditForm.elements.namedItem("resultType").value = item.resultType || "Needs AI Help";
   adminEditForm.elements.namedItem("webinarConsent").value = item.webinarConsent || "Maybe";
   adminEditForm.elements.namedItem("aiText").value = item.aiText || "";
@@ -165,7 +166,8 @@ async function saveAdminEdit() {
         title: formData.get("title").trim(),
         description: formData.get("description").trim(),
         category: formData.get("category").trim(),
-        author: formData.get("author").trim() || "Anonymous",
+        submitterName: formData.get("submitterName").trim(),
+        displayName: formData.get("displayName").trim(),
         stage: formData.get("stage").trim() || "Spark"
       }
     : {
@@ -174,7 +176,8 @@ async function saveAdminEdit() {
         category: formData.get("category").trim() || item.category,
         heritage: formData.get("heritage").trim() || "Shared heritage",
         originCulture: formData.get("originCulture").trim() || "Not specified",
-        author: formData.get("author").trim() || "Anonymous",
+        submitterName: formData.get("submitterName").trim(),
+        displayName: formData.get("displayName").trim(),
         webinarConsent: formData.get("webinarConsent"),
         source: formData.get("source").trim(),
         resultType: formData.get("resultType"),

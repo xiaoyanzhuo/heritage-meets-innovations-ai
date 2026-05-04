@@ -99,6 +99,18 @@ let editingId = null;
 let favoriteIds = loadFavorites();
 let currentViewerImages = [];
 let currentViewerIndex = 0;
+const HERITAGE_FOCUS_OPTIONS = [
+  "Family legacy",
+  "Language",
+  "Proverb or saying",
+  "Tradition",
+  "Festival or holiday",
+  "Recipe or food memory",
+  "Art or craft",
+  "Music or performance",
+  "Place or migration story",
+  "Community value"
+];
 
 const form = document.querySelector("#studioForm");
 const grid = document.querySelector("#resultsGrid");
@@ -133,10 +145,29 @@ const viewerNextButton = document.querySelector("#viewerNextButton");
 const viewerThumbs = document.querySelector("#viewerThumbs");
 const coverPicker = document.querySelector("#coverPicker");
 const coverPickerGrid = document.querySelector("#coverPickerGrid");
+const heritageOtherField = document.querySelector("#heritageOtherField");
+const heritageChoiceInput = form.elements.namedItem("heritageChoice");
+const heritageOtherInput = form.elements.namedItem("heritageOther");
+const submitterNameInput = form.elements.namedItem("submitterName");
+const displayNameInput = form.elements.namedItem("displayName");
+let lastSyncedDisplayName = "";
 
 form.addEventListener("change", (event) => {
   if (event.target.name === "aiMode") updateModePanels();
+  if (event.target.name === "heritageChoice") updateHeritageOtherField();
   if (event.target.name === "imageFile") renderCoverPicker();
+});
+
+submitterNameInput.addEventListener("input", () => {
+  const nextName = submitterNameInput.value;
+  if (!displayNameInput.value.trim() || displayNameInput.value === lastSyncedDisplayName) {
+    displayNameInput.value = nextName;
+    lastSyncedDisplayName = nextName;
+  }
+});
+
+displayNameInput.addEventListener("input", () => {
+  lastSyncedDisplayName = displayNameInput.value === submitterNameInput.value ? displayNameInput.value : "";
 });
 
 form.addEventListener("submit", async (event) => {
@@ -203,13 +234,20 @@ clearButton.addEventListener("click", async () => {
 function buildSubmissionPayload() {
   const formData = new FormData(form);
   const aiMode = formData.get("aiMode");
+  const heritageChoice = formData.get("heritageChoice");
+  const heritageOther = String(formData.get("heritageOther") || "").trim();
   const isNoAi = aiMode === "No AI Please";
   const resultType = isNoAi ? "No AI Please" : formData.get("aiStatus");
   const connections = isNoAi ? [] : normalizeConnections(formData.getAll("connections"));
   const existingResult = editingId ? results.find((entry) => entry.id === editingId) : null;
 
   formData.set("aiMode", aiMode);
+  formData.set("heritage", heritageChoice === "Other" ? heritageOther : heritageChoice);
+  formData.set("submitterName", String(formData.get("submitterName") || "").trim());
+  formData.set("displayName", String(formData.get("displayName") || "").trim() || formData.get("submitterName"));
   formData.set("resultType", resultType);
+  formData.delete("heritageChoice");
+  formData.delete("heritageOther");
   formData.delete("aiStatus");
   formData.delete("connections");
   connections.forEach((connection) => formData.append("connections", connection));
@@ -375,7 +413,7 @@ function render() {
     card.querySelector(".source-type").textContent = result.category;
     card.querySelector("h3").textContent = result.title;
     card.querySelector(".source-copy").textContent = result.source;
-    card.querySelector(".author").textContent = `${result.author} · ${result.originCulture || result.heritage}`;
+    card.querySelector(".author").textContent = `${result.displayName || result.author} · ${result.originCulture || result.heritage}`;
     card.querySelector(".stage").textContent = result.connections.length ? result.connections.join(" + ") : "Source only";
     const voteButton = card.querySelector(".vote-button");
     voteButton.querySelector("span").textContent = `${result.applause} ${result.applause === 1 ? "applause" : "applause"}`;
@@ -514,7 +552,7 @@ function openResultViewer(id) {
   viewerType.dataset.type = result.resultType;
   viewerCategory.textContent = result.category;
   viewerTitle.textContent = result.title;
-  viewerMeta.textContent = `${result.author} · ${result.originCulture || result.heritage} · ${result.connections.length ? result.connections.join(" + ") : "Source only"}`;
+  viewerMeta.textContent = `${result.displayName || result.author} · ${result.originCulture || result.heritage} · ${result.connections.length ? result.connections.join(" + ") : "Source only"}`;
   viewerSource.textContent = result.source;
 
   if (currentViewerImages.length) {
@@ -595,9 +633,19 @@ function startEdit(id) {
   form.elements.namedItem("title").value = result.title;
   form.elements.namedItem("source").value = result.source;
   form.elements.namedItem("category").value = result.category;
-  form.elements.namedItem("heritage").value = result.heritage;
+  if (HERITAGE_FOCUS_OPTIONS.includes(result.heritage)) {
+    heritageChoiceInput.value = result.heritage;
+    heritageOtherInput.value = "";
+  } else {
+    heritageChoiceInput.value = "Other";
+    heritageOtherInput.value = result.heritage || "";
+  }
   form.elements.namedItem("originCulture").value = result.originCulture || "";
-  form.elements.namedItem("author").value = result.author;
+  form.elements.namedItem("submitterName").value = result.submitterName || "";
+  form.elements.namedItem("displayName").value = result.displayName || result.author || "";
+  lastSyncedDisplayName = form.elements.namedItem("displayName").value === form.elements.namedItem("submitterName").value
+    ? form.elements.namedItem("displayName").value
+    : "";
   form.elements.namedItem("webinarConsent").value = result.webinarConsent || "Maybe";
   form.elements.namedItem("resource").value = result.resource;
   form.elements.namedItem("aiText").value = result.aiText;
@@ -615,6 +663,7 @@ function startEdit(id) {
   });
 
   updateModePanels();
+  updateHeritageOtherField();
   submitLabel.textContent = "Update submission";
   cancelEditButton.classList.remove("is-hidden");
   form.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -623,11 +672,13 @@ function startEdit(id) {
 function resetFormState() {
   editingId = null;
   form.reset();
+  lastSyncedDisplayName = "";
   renderCoverPicker();
   form.querySelector('input[name="aiMode"][value="With AI"]').checked = true;
   form.querySelector('input[name="aiStatus"][value="Needs AI Help"]').checked = true;
   form.querySelector('input[name="connections"][value="Translate"]').checked = true;
   updateModePanels();
+  updateHeritageOtherField();
   submitLabel.textContent = "Add submission";
   cancelEditButton.classList.add("is-hidden");
 }
@@ -674,6 +725,14 @@ function updateModePanels() {
   });
 }
 
+function updateHeritageOtherField() {
+  const useOther = heritageChoiceInput.value === "Other";
+  heritageOtherField.classList.toggle("is-hidden", !useOther);
+  heritageOtherInput.disabled = !useOther;
+  heritageOtherInput.required = useOther;
+  if (!useOther) heritageOtherInput.value = "";
+}
+
 function buildOutput(resultType, connections, source) {
   const excerpt = source.length > 96 ? `${source.slice(0, 96)}...` : source;
   if (resultType === "AI-Assisted Result") {
@@ -688,7 +747,7 @@ function isImageResource(resource) {
 }
 
 function toCsv(rows) {
-  const headers = ["Title", "Submission Type", "Heritage Focus", "Originated Culture Or Region", "Member", "Webinar Sharing Consent", "Source", "Original Mode", "Original Status", "Original AI Connections", "Current Mode", "Current Status", "Current AI Connections", "Converted From Needs AI", "Converted At", "Updated At", "AI Text", "How To Speak It", "Resource", "Cover Image", "All Images", "Has Image", "Applause", "Featured", "Created At"];
+  const headers = ["Title", "Submission Type", "Heritage Focus", "Originated Culture Or Region", "Public Display Name", "Webinar Sharing Consent", "Source", "Original Mode", "Original Status", "Original AI Connections", "Current Mode", "Current Status", "Current AI Connections", "Converted From Needs AI", "Converted At", "Updated At", "AI Text", "How To Speak It", "Resource", "Cover Image", "All Images", "Has Image", "Applause", "Featured", "Created At"];
   const values = rows.map((result) => [
     result.title,
     result.category,
@@ -724,6 +783,7 @@ function toCsv(rows) {
 
 async function initialize() {
   updateModePanels();
+  updateHeritageOtherField();
   setShowcaseView(localStorage.getItem("aapi-ai-showcase-view") === "gallery" ? "gallery" : "full");
   results = await loadResults();
   render();

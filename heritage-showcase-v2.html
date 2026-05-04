@@ -65,20 +65,45 @@
 
             <label>
               Heritage focus
-              <input name="heritage" type="text" maxlength="44" placeholder="Culture, region, language">
+              <select name="heritageChoice" required>
+                <option value="Family legacy">Family legacy</option>
+                <option value="Language">Language</option>
+                <option value="Proverb or saying">Proverb or saying</option>
+                <option value="Tradition">Tradition</option>
+                <option value="Festival or holiday">Festival or holiday</option>
+                <option value="Recipe or food memory">Recipe or food memory</option>
+                <option value="Art or craft">Art or craft</option>
+                <option value="Music or performance">Music or performance</option>
+                <option value="Place or migration story">Place or migration story</option>
+                <option value="Community value">Community value</option>
+                <option value="Other">Other</option>
+              </select>
             </label>
           </div>
 
-          <label>
-            Originated culture, country, or region
-            <input name="originCulture" type="text" maxlength="116" placeholder="Example: Vietnamese, Chinese, South Asian, Pacific Islander">
-            <span class="field-hint">Use whatever you prefer: specific culture/country or broader region.</span>
+          <label id="heritageOtherField" class="is-hidden">
+            Add heritage focus
+            <input name="heritageOther" type="text" maxlength="60" disabled>
           </label>
 
           <label>
-            Member or team
-            <input name="author" type="text" maxlength="42" placeholder="Name, team, or anonymous">
+            Originated culture, country, or region
+            <input name="originCulture" type="text" maxlength="116">
           </label>
+
+          <div class="form-grid identity-grid">
+            <label>
+              Username
+              <input name="submitterName" type="text" maxlength="80" required>
+              <span class="field-hint">Please provide the correct username or name so we can reach out if your work wins a prize or award.</span>
+            </label>
+
+            <label>
+              Display name
+              <input name="displayName" type="text" maxlength="60">
+              <span class="field-hint">Shown publicly. It defaults to your username, or you can use an art name.</span>
+            </label>
+          </div>
 
           <label>
             Heritage Month webinar sharing

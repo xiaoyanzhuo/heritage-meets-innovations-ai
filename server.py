@@ -82,6 +82,8 @@ def init_db() -> None:
               description TEXT NOT NULL,
               category TEXT NOT NULL,
               author TEXT NOT NULL,
+              submitter_name TEXT NOT NULL DEFAULT '',
+              display_name TEXT NOT NULL DEFAULT '',
               stage TEXT NOT NULL,
               votes INTEGER NOT NULL DEFAULT 0,
               pinned INTEGER NOT NULL DEFAULT 0,
@@ -98,6 +100,8 @@ def init_db() -> None:
               heritage TEXT NOT NULL,
               origin_culture TEXT NOT NULL,
               author TEXT NOT NULL,
+              submitter_name TEXT NOT NULL DEFAULT '',
+              display_name TEXT NOT NULL DEFAULT '',
               webinar_consent TEXT NOT NULL,
               source TEXT NOT NULL,
               ai_mode TEXT NOT NULL,
@@ -125,9 +129,13 @@ def init_db() -> None:
             """
         )
         ensure_column(conn, "ideas", "owner_id", "TEXT NOT NULL DEFAULT ''")
+        ensure_column(conn, "ideas", "submitter_name", "TEXT NOT NULL DEFAULT ''")
+        ensure_column(conn, "ideas", "display_name", "TEXT NOT NULL DEFAULT ''")
         ensure_column(conn, "ideas", "deleted_at", "TEXT NOT NULL DEFAULT ''")
         ensure_column(conn, "ideas", "deleted_by", "TEXT NOT NULL DEFAULT ''")
         ensure_column(conn, "showcase", "owner_id", "TEXT NOT NULL DEFAULT ''")
+        ensure_column(conn, "showcase", "submitter_name", "TEXT NOT NULL DEFAULT ''")
+        ensure_column(conn, "showcase", "display_name", "TEXT NOT NULL DEFAULT ''")
         ensure_column(conn, "showcase", "deleted_at", "TEXT NOT NULL DEFAULT ''")
         ensure_column(conn, "showcase", "deleted_by", "TEXT NOT NULL DEFAULT ''")
         ensure_column(conn, "showcase", "image_paths", "TEXT NOT NULL DEFAULT '[]'")
@@ -152,16 +160,20 @@ def seed_if_empty(conn: sqlite3.Connection, table: str, path: Path, upsert) -> N
 
 
 def row_to_idea(row: sqlite3.Row, client_id: str = "", include_deleted: bool = False, include_owner: bool = False) -> dict:
+    display_name = row["display_name"] or row["author"]
+    submitter_name = row["submitter_name"] or row["author"]
+    can_edit = bool(row["owner_id"] and row["owner_id"] == client_id)
     idea = {
         "id": row["id"],
         "title": row["title"],
         "description": row["description"],
         "category": row["category"],
-        "author": row["author"],
+        "author": display_name,
+        "displayName": display_name,
         "stage": row["stage"],
         "votes": row["votes"],
         "pinned": bool(row["pinned"]),
-        "canEdit": bool(row["owner_id"] and row["owner_id"] == client_id),
+        "canEdit": can_edit,
         "createdAt": row["created_at"],
     }
     if include_deleted:
@@ -169,10 +181,15 @@ def row_to_idea(row: sqlite3.Row, client_id: str = "", include_deleted: bool = F
         idea["deletedBy"] = row["deleted_by"]
     if include_owner:
         idea["ownerId"] = row["owner_id"]
+    if include_owner or can_edit:
+        idea["submitterName"] = submitter_name
     return idea
 
 
 def row_to_showcase(row: sqlite3.Row, client_id: str = "", include_deleted: bool = False, include_owner: bool = False) -> dict:
+    display_name = row["display_name"] or row["author"]
+    submitter_name = row["submitter_name"] or row["author"]
+    can_edit = bool(row["owner_id"] and row["owner_id"] == client_id)
     image_paths = clean_list(row["image_paths"]) if "image_paths" in row.keys() else []
     if row["image_path"] and row["image_path"] not in image_paths:
         image_paths = [row["image_path"], *image_paths]
@@ -185,7 +202,8 @@ def row_to_showcase(row: sqlite3.Row, client_id: str = "", include_deleted: bool
         "category": row["category"],
         "heritage": row["heritage"],
         "originCulture": row["origin_culture"],
-        "author": row["author"],
+        "author": display_name,
+        "displayName": display_name,
         "webinarConsent": row["webinar_consent"],
         "source": row["source"],
         "aiMode": row["ai_mode"],
@@ -206,7 +224,7 @@ def row_to_showcase(row: sqlite3.Row, client_id: str = "", include_deleted: bool
         "imageData": "",
         "applause": row["applause"],
         "featured": bool(row["featured"]),
-        "canEdit": bool(row["owner_id"] and row["owner_id"] == client_id),
+        "canEdit": can_edit,
         "createdAt": row["created_at"],
     }
     if include_deleted:
@@ -214,6 +232,8 @@ def row_to_showcase(row: sqlite3.Row, client_id: str = "", include_deleted: bool
         item["deletedBy"] = row["deleted_by"]
     if include_owner:
         item["ownerId"] = row["owner_id"]
+    if include_owner or can_edit:
+        item["submitterName"] = submitter_name
     return item
 
 
@@ -246,12 +266,23 @@ def clean_bool(value, fallback: bool = False) -> bool:
 
 def normalize_idea(payload: dict, existing: dict | None = None) -> dict:
     existing = existing or {}
+    submitter_name = clean_text(payload.get("submitterName"), existing.get("submitterName", ""))
+    display_name = clean_text(payload.get("displayName"), existing.get("displayName", ""))
+    legacy_author = clean_text(payload.get("author"), existing.get("author", ""))
+    if not submitter_name:
+        submitter_name = legacy_author
+    if not submitter_name:
+        raise ValueError("Username or name is required.")
+    if not display_name:
+        display_name = legacy_author or submitter_name
     return {
         "id": clean_text(payload.get("id"), existing.get("id") or str(uuid.uuid4())),
         "title": clean_text(payload.get("title"), existing.get("title", "")),
         "description": clean_text(payload.get("description"), existing.get("description", "")),
         "category": clean_text(payload.get("category"), existing.get("category", "Culture & Heritage")),
-        "author": clean_text(payload.get("author"), existing.get("author", "Anonymous")),
+        "author": display_name,
+        "submitterName": submitter_name,
+        "displayName": display_name,
         "stage": clean_text(payload.get("stage"), existing.get("stage", "Spark")),
         "votes": int(payload.get("votes", existing.get("votes", 0)) or 0),
         "pinned": clean_bool(payload.get("pinned"), existing.get("pinned", False)),
@@ -288,13 +319,24 @@ def normalize_showcase(payload: dict, existing: dict | None = None) -> dict:
         cover_image_path = image_paths[0]
     if cover_image_path and cover_image_path not in image_paths:
         image_paths.insert(0, cover_image_path)
+    submitter_name = clean_text(payload.get("submitterName"), existing.get("submitterName", ""))
+    display_name = clean_text(payload.get("displayName"), existing.get("displayName", ""))
+    legacy_author = clean_text(payload.get("author"), existing.get("author", ""))
+    if not submitter_name:
+        submitter_name = legacy_author
+    if not submitter_name:
+        raise ValueError("Username or name is required.")
+    if not display_name:
+        display_name = legacy_author or submitter_name
     return {
         "id": clean_text(payload.get("id"), existing.get("id") or str(uuid.uuid4())),
         "title": clean_text(payload.get("title"), existing.get("title", "")),
         "category": clean_text(payload.get("category"), existing.get("category", "Story")),
         "heritage": clean_text(payload.get("heritage"), existing.get("heritage", "Shared heritage")),
         "originCulture": clean_text(payload.get("originCulture"), existing.get("originCulture", "Not specified")),
-        "author": clean_text(payload.get("author"), existing.get("author", "Anonymous")),
+        "author": display_name,
+        "submitterName": submitter_name,
+        "displayName": display_name,
         "webinarConsent": clean_text(payload.get("webinarConsent"), existing.get("webinarConsent", "Maybe")),
         "source": clean_text(payload.get("source"), existing.get("source", "")),
         "aiMode": ai_mode,
@@ -325,11 +367,12 @@ def upsert_idea(conn: sqlite3.Connection, payload: dict) -> dict:
     idea = normalize_idea(payload)
     conn.execute(
         """
-        INSERT INTO ideas (id, title, description, category, author, stage, votes, pinned, owner_id, deleted_at, deleted_by, created_at)
-        VALUES (:id, :title, :description, :category, :author, :stage, :votes, :pinned, :ownerId, :deletedAt, :deletedBy, :createdAt)
+        INSERT INTO ideas (id, title, description, category, author, submitter_name, display_name, stage, votes, pinned, owner_id, deleted_at, deleted_by, created_at)
+        VALUES (:id, :title, :description, :category, :author, :submitterName, :displayName, :stage, :votes, :pinned, :ownerId, :deletedAt, :deletedBy, :createdAt)
         ON CONFLICT(id) DO UPDATE SET
           title=excluded.title, description=excluded.description, category=excluded.category,
-          author=excluded.author, stage=excluded.stage, votes=excluded.votes,
+          author=excluded.author, submitter_name=excluded.submitter_name,
+          display_name=excluded.display_name, stage=excluded.stage, votes=excluded.votes,
           pinned=excluded.pinned, owner_id=excluded.owner_id, deleted_at=excluded.deleted_at,
           deleted_by=excluded.deleted_by, created_at=excluded.created_at
         """,
@@ -343,14 +386,14 @@ def upsert_showcase(conn: sqlite3.Connection, payload: dict, existing: dict | No
     conn.execute(
         """
         INSERT INTO showcase (
-          id, title, category, heritage, origin_culture, author, webinar_consent, source,
+          id, title, category, heritage, origin_culture, author, submitter_name, display_name, webinar_consent, source,
           ai_mode, result_type, connections, original_ai_mode, original_result_type,
           original_connections, converted_from_needs_ai, converted_at, updated_at,
           ai_text, reading_guide, resource, image_path, image_paths, cover_image_path,
           applause, featured, owner_id, deleted_at, deleted_by, created_at
         )
         VALUES (
-          :id, :title, :category, :heritage, :originCulture, :author, :webinarConsent, :source,
+          :id, :title, :category, :heritage, :originCulture, :author, :submitterName, :displayName, :webinarConsent, :source,
           :aiMode, :resultType, :connectionsJson, :originalAiMode, :originalResultType,
           :originalConnectionsJson, :convertedFromNeedsAiInt, :convertedAt, :updatedAt,
           :aiText, :readingGuide, :resource, :imagePath, :imagePathsJson, :coverImagePath,
@@ -359,6 +402,7 @@ def upsert_showcase(conn: sqlite3.Connection, payload: dict, existing: dict | No
         ON CONFLICT(id) DO UPDATE SET
           title=excluded.title, category=excluded.category, heritage=excluded.heritage,
           origin_culture=excluded.origin_culture, author=excluded.author,
+          submitter_name=excluded.submitter_name, display_name=excluded.display_name,
           webinar_consent=excluded.webinar_consent, source=excluded.source,
           ai_mode=excluded.ai_mode, result_type=excluded.result_type,
           connections=excluded.connections, original_ai_mode=excluded.original_ai_mode,
@@ -544,12 +588,12 @@ class Handler(BaseHTTPRequestHandler):
     def list_ideas(self) -> list[dict]:
         with db() as conn:
             rows = conn.execute("SELECT * FROM ideas WHERE deleted_at = '' ORDER BY datetime(created_at) DESC").fetchall()
-        return [row_to_idea(row, self.client_id()) for row in rows]
+        return [row_to_idea(row, self.client_id(), include_owner=self.is_admin()) for row in rows]
 
     def list_showcase(self) -> list[dict]:
         with db() as conn:
             rows = conn.execute("SELECT * FROM showcase WHERE deleted_at = '' ORDER BY datetime(created_at) DESC").fetchall()
-        return [row_to_showcase(row, self.client_id()) for row in rows]
+        return [row_to_showcase(row, self.client_id(), include_owner=self.is_admin()) for row in rows]
 
     def create_idea(self) -> dict:
         payload = self.parse_json()
@@ -630,8 +674,8 @@ class Handler(BaseHTTPRequestHandler):
             ideas = conn.execute("SELECT * FROM ideas WHERE deleted_at != '' ORDER BY datetime(deleted_at) DESC").fetchall()
             showcase = conn.execute("SELECT * FROM showcase WHERE deleted_at != '' ORDER BY datetime(deleted_at) DESC").fetchall()
         return {
-            "ideas": [row_to_idea(row, include_deleted=True) for row in ideas],
-            "showcase": [row_to_showcase(row, include_deleted=True) for row in showcase],
+            "ideas": [row_to_idea(row, include_deleted=True, include_owner=True) for row in ideas],
+            "showcase": [row_to_showcase(row, include_deleted=True, include_owner=True) for row in showcase],
         }
 
     def recover_row(self, table: str, item_id: str) -> dict:

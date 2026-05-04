@@ -60,15 +60,18 @@ const ideaCancelEditButton = document.querySelector("#ideaCancelEditButton");
 const ideaWorkspace = document.querySelector("#ideaWorkspace");
 const ideaFullViewButton = document.querySelector("#ideaFullViewButton");
 const ideaWallOnlyButton = document.querySelector("#ideaWallOnlyButton");
+const submitterNameInput = form.elements.namedItem("submitterName");
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   const formData = new FormData(form);
+  const submitterName = formData.get("submitterName").trim();
   const idea = {
     title: formData.get("title").trim(),
     description: formData.get("description").trim(),
     category: formData.get("category"),
-    author: formData.get("author").trim() || "Anonymous",
+    submitterName,
+    displayName: submitterName,
     stage: formData.get("stage")
   };
 
@@ -238,7 +241,7 @@ function startEdit(id) {
   form.elements.namedItem("title").value = idea.title;
   form.elements.namedItem("description").value = idea.description;
   form.elements.namedItem("category").value = idea.category;
-  form.elements.namedItem("author").value = idea.author;
+  form.elements.namedItem("submitterName").value = idea.submitterName || "";
   form.querySelector(`input[name="stage"][value="${idea.stage}"]`).checked = true;
   ideaSubmitLabel.textContent = "Update idea";
   ideaCancelEditButton.classList.remove("is-hidden");
@@ -313,7 +316,7 @@ function updateFilterButtons() {
 }
 
 function toCsv(rows) {
-  const headers = ["Title", "Description", "Impact Area", "Submitted By", "Stage", "Votes", "Pinned", "Created At"];
+  const headers = ["Title", "Description", "Impact Area", "Public Display Name", "Stage", "Votes", "Pinned", "Created At"];
   const values = rows.map((idea) => [
     idea.title,
     idea.description,
