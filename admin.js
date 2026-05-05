@@ -1,3 +1,4 @@
+const ADMIN_SESSION_KEY = "aapin-admin-key";
 const adminForm = document.querySelector("#adminForm");
 const liveAdminList = document.querySelector("#liveAdminList");
 const liveAdminEmpty = document.querySelector("#liveAdminEmpty");
@@ -9,15 +10,33 @@ const adminEditTitle = document.querySelector("#adminEditTitle");
 const adminCancelEditButton = document.querySelector("#adminCancelEditButton");
 const adminLogoutButton = document.querySelector("#adminLogoutButton");
 
-let adminKey = "";
+let adminKey = sessionStorage.getItem(ADMIN_SESSION_KEY) || "";
 let liveRows = [];
+
+if (adminKey) {
+  adminForm.elements.namedItem("adminKey").value = adminKey;
+  loadAdminData()
+    .then(() => adminLogoutButton.classList.remove("is-hidden"))
+    .catch(() => logoutAdmin());
+}
 
 adminForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  adminKey = new FormData(adminForm).get("adminKey").trim();
-  if (!adminKey) return;
-  await loadAdminData();
-  adminLogoutButton.classList.remove("is-hidden");
+  const nextAdminKey = new FormData(adminForm).get("adminKey").trim();
+  if (!nextAdminKey) return;
+  clearAdminContent();
+  adminLogoutButton.classList.add("is-hidden");
+  adminKey = nextAdminKey;
+  try {
+    await loadAdminData();
+    sessionStorage.setItem(ADMIN_SESSION_KEY, adminKey);
+    adminLogoutButton.classList.remove("is-hidden");
+  } catch (error) {
+    adminKey = "";
+    sessionStorage.removeItem(ADMIN_SESSION_KEY);
+    clearAdminContent();
+    window.alert(error.message);
+  }
 });
 
 adminEditForm.addEventListener("submit", async (event) => {
@@ -29,28 +48,22 @@ adminCancelEditButton.addEventListener("click", closeAdminEdit);
 adminLogoutButton.addEventListener("click", logoutAdmin);
 
 async function loadAdminData() {
-  await Promise.all([loadLiveItems(), loadDeletedItems()]);
+  const deleted = await fetchDeletedItems();
+  const liveItems = await fetchLiveItems();
+  renderDeletedItems(deleted);
+  renderLiveItems(liveItems);
 }
 
-async function loadLiveItems() {
-  try {
-    const [ideas, showcase] = await Promise.all([
-      apiRequest("/api/ideas"),
-      apiRequest("/api/showcase")
-    ]);
-    renderLiveItems({ ideas, showcase });
-  } catch (error) {
-    window.alert(error.message);
-  }
+async function fetchLiveItems() {
+  const [ideas, showcase] = await Promise.all([
+    apiRequest("/api/ideas"),
+    apiRequest("/api/showcase")
+  ]);
+  return { ideas, showcase };
 }
 
-async function loadDeletedItems() {
-  try {
-    const deleted = await apiRequest("/api/admin/deleted");
-    renderDeletedItems(deleted);
-  } catch (error) {
-    window.alert(error.message);
-  }
+async function fetchDeletedItems() {
+  return apiRequest("/api/admin/deleted");
 }
 
 function renderLiveItems(liveItems) {
@@ -90,9 +103,11 @@ function renderDeletedItems(deleted) {
 function buildAdminCard(item, mode) {
   const card = template.content.firstElementChild.cloneNode(true);
   const isDeleted = mode === "deleted";
+  card.dataset.table = item.table;
+  card.dataset.itemId = item.id;
   card.querySelector(".tag").textContent = item.type;
   card.querySelector(".stage").textContent = item.category || item.stage || (isDeleted ? "Deleted" : "Live");
-  card.querySelector("h3").textContent = item.title;
+  card.querySelector("h3").replaceChildren(buildPreviewLink(item, isDeleted));
   card.querySelector(".idea-copy").textContent = item.description || item.source || "";
   card.querySelector(".author").textContent = `${item.author || "Unknown display"} · admin: ${item.submitterName || "not captured"}`;
   card.querySelector(".deleted-at").textContent = isDeleted && item.deletedAt
@@ -102,6 +117,18 @@ function buildAdminCard(item, mode) {
   card.querySelector(".edit-live-button").classList.toggle("is-hidden", isDeleted);
   card.querySelector(".remove-button").classList.toggle("is-hidden", isDeleted);
   return card;
+}
+
+function buildPreviewLink(item, isDeleted) {
+  const link = document.createElement(isDeleted ? "span" : "a");
+  link.textContent = item.title;
+  if (!isDeleted) {
+    const targetPage = item.table === "showcase" ? "heritage-showcase-v2.html" : "index.html";
+    const targetParam = item.table === "showcase" ? "showcase" : "idea";
+    link.href = `${targetPage}?${targetParam}=${encodeURIComponent(item.id)}&fromAdmin=1`;
+    link.title = "Preview this submission on the public page";
+  }
+  return link;
 }
 
 function openAdminEdit(table, id) {
@@ -144,14 +171,19 @@ function closeAdminEdit() {
 
 function logoutAdmin() {
   adminKey = "";
-  liveRows = [];
+  sessionStorage.removeItem(ADMIN_SESSION_KEY);
   adminForm.reset();
+  clearAdminContent();
+  adminLogoutButton.classList.add("is-hidden");
+}
+
+function clearAdminContent() {
+  liveRows = [];
   closeAdminEdit();
   liveAdminList.innerHTML = "";
   adminList.innerHTML = "";
   liveAdminEmpty.classList.remove("is-visible");
   adminEmpty.classList.remove("is-visible");
-  adminLogoutButton.classList.add("is-hidden");
 }
 
 async function saveAdminEdit() {
@@ -196,9 +228,21 @@ async function saveAdminEdit() {
     });
     closeAdminEdit();
     await loadAdminData();
+    returnToEditedAdminItem(table, id);
   } catch (error) {
     window.alert(error.message);
   }
+}
+
+function returnToEditedAdminItem(table, id) {
+  window.requestAnimationFrame(() => {
+    const card = liveAdminList.querySelector(`[data-table="${CSS.escape(table)}"][data-item-id="${CSS.escape(id)}"]`);
+    if (!card) return;
+    card.classList.add("is-updated");
+    card.scrollIntoView({ behavior: "smooth", block: "center" });
+    card.focus({ preventScroll: true });
+    window.setTimeout(() => card.classList.remove("is-updated"), 2200);
+  });
 }
 
 async function removeLiveItem(table, id, title) {

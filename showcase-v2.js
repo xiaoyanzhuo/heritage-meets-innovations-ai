@@ -2,6 +2,7 @@ const FAVORITES_KEY = "aapi-ai-heritage-showcase-favorites";
 const CLIENT_KEY = "aapi-ai-contributor-id";
 const API_BASE = window.location.protocol === "file:" ? "" : "/api";
 const AI_CONNECTIONS = ["Translate", "Explain", "AI Image"];
+const MAX_IMAGE_UPLOAD_BYTES = 5 * 1024 * 1024;
 const SHARE_TYPES = new Set(["No AI Please", "Needs AI Help", "AI-Assisted Result"]);
 const SHARE_LABELS = {
   "No AI Please": "No AI Please",
@@ -94,23 +95,16 @@ const seedResults = [
 ];
 
 let results = [];
-let activeFilter = "All";
+let activeFilters = {
+  type: ["All"],
+  culture: ["All"],
+  mode: ["All"]
+};
 let editingId = null;
 let favoriteIds = loadFavorites();
 let currentViewerImages = [];
 let currentViewerIndex = 0;
-const HERITAGE_FOCUS_OPTIONS = [
-  "Family legacy",
-  "Language",
-  "Proverb or saying",
-  "Tradition",
-  "Festival or holiday",
-  "Recipe or food memory",
-  "Art or craft",
-  "Music or performance",
-  "Place or migration story",
-  "Community value"
-];
+let adminPreviewTargetId = "";
 
 const form = document.querySelector("#studioForm");
 const grid = document.querySelector("#resultsGrid");
@@ -145,17 +139,19 @@ const viewerNextButton = document.querySelector("#viewerNextButton");
 const viewerThumbs = document.querySelector("#viewerThumbs");
 const coverPicker = document.querySelector("#coverPicker");
 const coverPickerGrid = document.querySelector("#coverPickerGrid");
-const heritageOtherField = document.querySelector("#heritageOtherField");
-const heritageChoiceInput = form.elements.namedItem("heritageChoice");
-const heritageOtherInput = form.elements.namedItem("heritageOther");
+const aiTextDetails = document.querySelector("#aiTextDetails");
+const showcaseSuccess = document.querySelector("#showcaseSuccess");
+const showcaseReturnButton = document.querySelector("#showcaseReturnButton");
+const showcaseNewButton = document.querySelector("#showcaseNewButton");
+const showcaseGallery = document.querySelector(".results-board");
 const submitterNameInput = form.elements.namedItem("submitterName");
 const displayNameInput = form.elements.namedItem("displayName");
 let lastSyncedDisplayName = "";
 
 form.addEventListener("change", (event) => {
   if (event.target.name === "aiMode") updateModePanels();
-  if (event.target.name === "heritageChoice") updateHeritageOtherField();
-  if (event.target.name === "imageFile") renderCoverPicker();
+  if (event.target.name === "aiStatus" || event.target.name === "connections") updateOptionalFieldState();
+  if (event.target.name === "imageFile" && validateImageUploads()) renderCoverPicker();
 });
 
 submitterNameInput.addEventListener("input", () => {
@@ -172,6 +168,8 @@ displayNameInput.addEventListener("input", () => {
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (!validateImageUploads()) return;
+  const updatedId = editingId;
   const payload = buildSubmissionPayload();
   const method = editingId ? "PATCH" : "POST";
   const path = editingId ? `/showcase/${editingId}` : "/showcase";
@@ -180,18 +178,31 @@ form.addEventListener("submit", async (event) => {
     await apiRequest(path, { method, body: payload });
     results = await loadResults();
     resetFormState();
-    activeFilter = "All";
-    updateFilterButtons();
+    resetFilters();
     render();
+    showShowcaseSuccess();
+    if (updatedId) returnToUpdatedSubmission(updatedId);
   } catch (error) {
     window.alert(error.message);
   }
 });
 
+form.addEventListener("input", hideShowcaseSuccess);
+form.addEventListener("change", hideShowcaseSuccess);
 cancelEditButton.addEventListener("click", resetFormState);
 
 showcaseFullViewButton.addEventListener("click", () => setShowcaseView("full"));
 showcaseGalleryOnlyButton.addEventListener("click", () => setShowcaseView("gallery"));
+showcaseReturnButton.addEventListener("click", () => {
+  setShowcaseView("gallery");
+  showcaseGallery.scrollIntoView({ behavior: "smooth", block: "start" });
+});
+showcaseNewButton.addEventListener("click", () => {
+  setShowcaseView("full");
+  hideShowcaseSuccess();
+  form.scrollIntoView({ behavior: "smooth", block: "start" });
+  form.elements.namedItem("title").focus();
+});
 viewerCloseButton.addEventListener("click", closeResultViewer);
 viewerPrevButton.addEventListener("click", () => showViewerImage(currentViewerIndex - 1));
 viewerNextButton.addEventListener("click", () => showViewerImage(currentViewerIndex + 1));
@@ -199,12 +210,20 @@ resultViewer.addEventListener("click", (event) => {
   if (event.target === resultViewer) closeResultViewer();
 });
 
-filters.addEventListener("click", (event) => {
-  const button = event.target.closest("[data-filter]");
-  if (!button) return;
-  activeFilter = button.dataset.filter;
-  updateFilterButtons();
+filters.addEventListener("change", (event) => {
+  const fieldControl = event.target.closest("[data-filter-field]");
+  if (!fieldControl) return;
+  if (event.target.matches('input[type="checkbox"]')) syncFilterGroupSelection(fieldControl, event.target);
+  activeFilters[fieldControl.dataset.filterField] = fieldControl.tagName === "SELECT"
+    ? [fieldControl.value || "All"]
+    : getSelectedCheckboxValues(fieldControl);
   render();
+});
+
+document.addEventListener("click", (event) => {
+  document.querySelectorAll(".filter-dropdown[open]").forEach((dropdown) => {
+    if (!dropdown.contains(event.target)) dropdown.removeAttribute("open");
+  });
 });
 
 exportButton.addEventListener("click", () => {
@@ -223,8 +242,7 @@ clearButton.addEventListener("click", async () => {
   if (!adminKey) return;
   try {
     results = await apiRequest("/showcase/reset", { method: "POST", adminKey });
-    activeFilter = "All";
-    updateFilterButtons();
+    resetFilters();
     render();
   } catch (error) {
     window.alert(error.message);
@@ -234,20 +252,16 @@ clearButton.addEventListener("click", async () => {
 function buildSubmissionPayload() {
   const formData = new FormData(form);
   const aiMode = formData.get("aiMode");
-  const heritageChoice = formData.get("heritageChoice");
-  const heritageOther = String(formData.get("heritageOther") || "").trim();
   const isNoAi = aiMode === "No AI Please";
   const resultType = isNoAi ? "No AI Please" : formData.get("aiStatus");
   const connections = isNoAi ? [] : normalizeConnections(formData.getAll("connections"));
   const existingResult = editingId ? results.find((entry) => entry.id === editingId) : null;
 
   formData.set("aiMode", aiMode);
-  formData.set("heritage", heritageChoice === "Other" ? heritageOther : heritageChoice);
+  formData.set("heritage", formData.get("category"));
   formData.set("submitterName", String(formData.get("submitterName") || "").trim());
   formData.set("displayName", String(formData.get("displayName") || "").trim() || formData.get("submitterName"));
   formData.set("resultType", resultType);
-  formData.delete("heritageChoice");
-  formData.delete("heritageOther");
   formData.delete("aiStatus");
   formData.delete("connections");
   connections.forEach((connection) => formData.append("connections", connection));
@@ -340,6 +354,14 @@ function setShowcaseView(view) {
   localStorage.setItem("aapi-ai-showcase-view", view);
 }
 
+function showShowcaseSuccess() {
+  showcaseSuccess.classList.remove("is-hidden");
+}
+
+function hideShowcaseSuccess() {
+  showcaseSuccess.classList.add("is-hidden");
+}
+
 function normalizeResults(storedResults) {
   return storedResults.map((entry) => {
     const normalizedType = normalizeShareType(entry);
@@ -396,6 +418,7 @@ function normalizeConnections(connections) {
 
 function render() {
   grid.innerHTML = "";
+  updateFilterControls();
   const visibleResults = results
     .filter(matchesFilter)
     .sort((a, b) => Number(favoriteIds.has(b.id)) - Number(favoriteIds.has(a.id)) || b.applause - a.applause || new Date(b.createdAt) - new Date(a.createdAt));
@@ -408,6 +431,7 @@ function render() {
     const output = card.querySelector(".ai-output");
 
     card.classList.toggle("is-pinned", favoriteIds.has(result.id));
+    card.dataset.resultId = result.id;
     card.querySelector(".result-type").textContent = SHARE_LABELS[result.resultType] || result.resultType;
     card.querySelector(".result-type").dataset.type = result.resultType;
     card.querySelector(".source-type").textContent = result.category;
@@ -450,6 +474,9 @@ function render() {
     featureButton.setAttribute("aria-pressed", String(isFavorite));
     featureButton.addEventListener("click", () => toggleFavorite(result.id));
 
+    const cardAdminReturn = card.querySelector(".admin-card-return");
+    cardAdminReturn.classList.toggle("is-hidden", result.id !== adminPreviewTargetId);
+
     voteButton.addEventListener("click", () => applaudResult(result.id));
     const editButton = card.querySelector(".edit-button");
     const deleteButton = card.querySelector(".delete-button");
@@ -478,8 +505,10 @@ function render() {
 }
 
 function matchesFilter(result) {
-  if (activeFilter === "All") return true;
-  return result.resultType === activeFilter || result.connections.includes(activeFilter);
+  const matchesType = filterIncludes(activeFilters.type, result.category);
+  const matchesCulture = filterIncludes(activeFilters.culture, result.originCulture);
+  const matchesMode = filterIncludes(activeFilters.mode, result.aiMode);
+  return matchesType && matchesCulture && matchesMode;
 }
 
 async function applaudResult(id) {
@@ -633,13 +662,6 @@ function startEdit(id) {
   form.elements.namedItem("title").value = result.title;
   form.elements.namedItem("source").value = result.source;
   form.elements.namedItem("category").value = result.category;
-  if (HERITAGE_FOCUS_OPTIONS.includes(result.heritage)) {
-    heritageChoiceInput.value = result.heritage;
-    heritageOtherInput.value = "";
-  } else {
-    heritageChoiceInput.value = "Other";
-    heritageOtherInput.value = result.heritage || "";
-  }
   form.elements.namedItem("originCulture").value = result.originCulture || "";
   form.elements.namedItem("submitterName").value = result.submitterName || "";
   form.elements.namedItem("displayName").value = result.displayName || result.author || "";
@@ -663,10 +685,22 @@ function startEdit(id) {
   });
 
   updateModePanels();
-  updateHeritageOtherField();
+  updateOptionalFieldState();
   submitLabel.textContent = "Update submission";
   cancelEditButton.classList.remove("is-hidden");
   form.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function returnToUpdatedSubmission(id) {
+  setShowcaseView("gallery");
+  window.requestAnimationFrame(() => {
+    const card = grid.querySelector(`[data-result-id="${CSS.escape(id)}"]`);
+    if (!card) return;
+    card.classList.add("is-updated");
+    card.scrollIntoView({ behavior: "smooth", block: "center" });
+    card.focus({ preventScroll: true });
+    window.setTimeout(() => card.classList.remove("is-updated"), 2200);
+  });
 }
 
 function resetFormState() {
@@ -675,10 +709,12 @@ function resetFormState() {
   lastSyncedDisplayName = "";
   renderCoverPicker();
   form.querySelector('input[name="aiMode"][value="With AI"]').checked = true;
-  form.querySelector('input[name="aiStatus"][value="Needs AI Help"]').checked = true;
-  form.querySelector('input[name="connections"][value="Translate"]').checked = true;
+  form.querySelector('input[name="aiStatus"][value="AI-Assisted Result"]').checked = true;
+  form.querySelectorAll('input[name="connections"]').forEach((input) => {
+    input.checked = input.value === "AI Image";
+  });
   updateModePanels();
-  updateHeritageOtherField();
+  updateOptionalFieldState();
   submitLabel.textContent = "Add submission";
   cancelEditButton.classList.add("is-hidden");
 }
@@ -706,16 +742,117 @@ function renderCoverPicker() {
   });
 }
 
+function validateImageUploads() {
+  const input = form.elements.namedItem("imageFile");
+  const oversizedFiles = [...input.files || []].filter((file) => file.size > MAX_IMAGE_UPLOAD_BYTES);
+  if (!oversizedFiles.length) return true;
+  const fileList = oversizedFiles.map((file) => file.name).join(", ");
+  window.alert(`Each image must be 5 MB or smaller. Please replace: ${fileList}`);
+  input.value = "";
+  renderCoverPicker();
+  return false;
+}
+
 function updateStats() {
   submissionCount.textContent = results.length;
   resultCount.textContent = results.filter((result) => result.aiMode === "With AI").length;
   imageCount.textContent = results.filter((result) => getImageSources(result).length).length;
 }
 
-function updateFilterButtons() {
-  document.querySelectorAll("[data-filter]").forEach((button) => {
-    button.classList.toggle("is-active", button.dataset.filter === activeFilter);
+function resetFilters() {
+  activeFilters = {
+    type: ["All"],
+    culture: ["All"],
+    mode: ["All"]
+  };
+}
+
+function updateFilterControls() {
+  updateFilterGroup("type", "All types", uniqueValues(results.map((result) => result.category)));
+  updateFilterGroup("culture", "All cultures/regions", uniqueValues(results.map((result) => result.originCulture)));
+  updateFilterSelect("mode", "All modes", ["With AI", "No AI Please"]);
+}
+
+function updateFilterGroup(field, allLabel, values) {
+  const group = filters.querySelector(`[data-filter-field="${field}"]`);
+  if (!group) return;
+  const optionBox = group.querySelector(".filter-option-box");
+  const summary = group.querySelector("[data-filter-summary]");
+  const selectedValues = normalizeFilterValues(activeFilters[field], values);
+  activeFilters[field] = selectedValues;
+  optionBox.innerHTML = "";
+  [{ label: allLabel, value: "All" }, ...values.map((value) => ({ label: value, value }))].forEach((option) => {
+    const label = document.createElement("label");
+    const input = document.createElement("input");
+    const text = document.createElement("span");
+    input.type = "checkbox";
+    input.value = option.value;
+    input.checked = option.value === "All"
+      ? selectedValues.length === values.length
+      : selectedValues.includes(option.value);
+    text.textContent = option.label;
+    label.append(input, text);
+    optionBox.append(label);
   });
+  summary.textContent = getFilterSummary(allLabel, selectedValues, values.length);
+}
+
+function updateFilterSelect(field, allLabel, values) {
+  const select = filters.querySelector(`[data-filter-field="${field}"]`);
+  if (!select) return;
+  const selectedValues = normalizeFilterValues(activeFilters[field], values);
+  activeFilters[field] = selectedValues;
+  select.innerHTML = "";
+  select.append(new Option(allLabel, "All"));
+  values.forEach((value) => select.append(new Option(value, value)));
+  [...select.options].forEach((option) => {
+    option.selected = selectedValues.includes(option.value);
+  });
+}
+
+function getSelectedCheckboxValues(group) {
+  const availableValues = [...group.querySelectorAll('input[type="checkbox"]')]
+    .map((input) => input.value)
+    .filter((value) => value !== "All");
+  const selectedValues = [...group.querySelectorAll('input[type="checkbox"]:checked')].map((input) => input.value);
+  if (selectedValues.includes("All")) return availableValues;
+  return normalizeFilterValues(selectedValues, availableValues);
+}
+
+function syncFilterGroupSelection(group, changedInput) {
+  const allInput = group.querySelector('input[value="All"]');
+  const specificInputs = [...group.querySelectorAll('input[type="checkbox"]:not([value="All"])')];
+  if (changedInput.value === "All") {
+    specificInputs.forEach((input) => {
+      input.checked = changedInput.checked;
+    });
+    return;
+  }
+  allInput.checked = specificInputs.length > 0 && specificInputs.every((input) => input.checked);
+}
+
+function getFilterSummary(allLabel, selectedValues, availableCount) {
+  if (!selectedValues.length || selectedValues.includes("All")) return allLabel;
+  if (availableCount > 0 && selectedValues.length === availableCount) return allLabel;
+  if (selectedValues.length === 1) return selectedValues[0];
+  return `${selectedValues.length} selected`;
+}
+
+function normalizeFilterValues(selectedValues, availableValues) {
+  const values = Array.isArray(selectedValues) ? selectedValues : [selectedValues];
+  const selected = values.filter((value) => value === "All" || availableValues.includes(value));
+  const specificValues = selected.filter((value) => value !== "All");
+  if (selected.includes("All")) return [...availableValues];
+  return specificValues;
+}
+
+function filterIncludes(selectedValues, value) {
+  return !selectedValues.length || selectedValues.includes("All") || selectedValues.includes(value);
+}
+
+function uniqueValues(values) {
+  return [...new Set(values.map((value) => String(value || "").trim()).filter(Boolean))]
+    .sort((first, second) => first.localeCompare(second));
 }
 
 function updateModePanels() {
@@ -723,14 +860,16 @@ function updateModePanels() {
   document.querySelectorAll("[data-mode-panel]").forEach((panel) => {
     panel.classList.toggle("is-hidden", panel.dataset.modePanel !== mode);
   });
+  updateOptionalFieldState();
 }
 
-function updateHeritageOtherField() {
-  const useOther = heritageChoiceInput.value === "Other";
-  heritageOtherField.classList.toggle("is-hidden", !useOther);
-  heritageOtherInput.disabled = !useOther;
-  heritageOtherInput.required = useOther;
-  if (!useOther) heritageOtherInput.value = "";
+function updateOptionalFieldState() {
+  const aiMode = form.querySelector('input[name="aiMode"]:checked').value;
+  const aiStatus = form.querySelector('input[name="aiStatus"]:checked')?.value;
+  const shouldOpenAiText = aiMode === "With AI"
+    && aiStatus === "AI-Assisted Result"
+    && ["Translate", "Explain"].some((connection) => form.querySelector(`input[name="connections"][value="${connection}"]`)?.checked);
+  aiTextDetails.open = shouldOpenAiText;
 }
 
 function buildOutput(resultType, connections, source) {
@@ -783,10 +922,28 @@ function toCsv(rows) {
 
 async function initialize() {
   updateModePanels();
-  updateHeritageOtherField();
+  updateOptionalFieldState();
   setShowcaseView(localStorage.getItem("aapi-ai-showcase-view") === "gallery" ? "gallery" : "full");
   results = await loadResults();
   render();
+  openPreviewTarget();
 }
 
 initialize();
+
+function openPreviewTarget() {
+  const params = new URLSearchParams(window.location.search);
+  const targetId = params.get("showcase");
+  showAdminReturnLink(params);
+  if (!targetId) return;
+  adminPreviewTargetId = targetId;
+  resetFilters();
+  setShowcaseView("gallery");
+  render();
+  returnToUpdatedSubmission(targetId);
+}
+
+function showAdminReturnLink(params) {
+  if (params.get("fromAdmin") !== "1" && !sessionStorage.getItem("aapin-admin-key")) return;
+  document.querySelector(".admin-return-link")?.classList.remove("is-hidden");
+}

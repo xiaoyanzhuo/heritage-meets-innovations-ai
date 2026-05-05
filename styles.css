@@ -71,6 +71,12 @@ button {
   background: var(--ink);
 }
 
+.site-nav__link.admin-return-link {
+  margin-left: auto;
+  border-color: rgba(8, 120, 138, 0.38);
+  color: var(--teal);
+}
+
 .hero {
   display: grid;
   grid-template-columns: minmax(240px, 0.72fr) 1fr;
@@ -190,7 +196,11 @@ h1 {
   top: 18px;
   display: grid;
   gap: 16px;
+  max-height: calc(100vh - 36px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 22px;
+  scrollbar-gutter: stable;
 }
 
 .section-heading h2 {
@@ -205,6 +215,17 @@ label {
   color: #26385b;
   font-size: 0.92rem;
   font-weight: 750;
+}
+
+.label-title {
+  display: inline-flex;
+  gap: 3px;
+  align-items: baseline;
+}
+
+.required-marker {
+  color: #c84d1b;
+  font-weight: 900;
 }
 
 input,
@@ -235,6 +256,11 @@ select:focus {
 .form-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.stacked-fields {
+  display: grid;
   gap: 12px;
 }
 
@@ -305,6 +331,34 @@ legend {
 .primary-action span {
   font-size: 1.28rem;
   line-height: 1;
+}
+
+.submission-success {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
+  border: 1px solid rgba(22, 131, 79, 0.24);
+  border-radius: 8px;
+  background: rgba(22, 131, 79, 0.08);
+  color: #274833;
+  padding: 10px 11px;
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
+.success-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.submission-success .secondary-action {
+  margin: 0;
+  width: auto;
+  padding: 8px 10px;
+  font-size: 0.78rem;
 }
 
 .wall {
@@ -419,6 +473,111 @@ svg {
   background: var(--teal);
 }
 
+.filter-selects {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
+  column-gap: 14px;
+  row-gap: 10px;
+}
+
+.filter-select {
+  display: grid;
+  gap: 5px;
+  font-size: 0.78rem;
+  font-weight: 750;
+  position: relative;
+}
+
+.filter-select select {
+  padding: 8px 10px;
+  font-size: 0.85rem;
+}
+
+.filter-select select {
+  min-height: 38px;
+}
+
+.filter-dropdown {
+  position: relative;
+  border: 0;
+  padding: 0;
+}
+
+.filter-dropdown summary {
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid rgba(16, 34, 74, 0.22);
+  border-radius: 8px;
+  background: #fffdf8;
+  color: var(--ink);
+  cursor: pointer;
+  padding: 8px 10px;
+  font-size: 0.85rem;
+  font-weight: 800;
+  list-style: none;
+}
+
+.filter-dropdown summary::-webkit-details-marker {
+  display: none;
+}
+
+.filter-dropdown summary::after {
+  content: "v";
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 900;
+}
+
+.filter-dropdown[open] summary {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 4px rgba(8, 120, 138, 0.14);
+}
+
+.filter-option-box {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 7px;
+  border: 1px solid rgba(16, 34, 74, 0.18);
+  border-radius: 8px;
+  background: #fffdf8;
+  box-shadow: 0 18px 32px rgba(28, 38, 68, 0.16);
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.filter-option-box label {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid rgba(16, 34, 74, 0.14);
+  border-radius: 6px;
+  background: #ffffff;
+  padding: 7px 8px;
+  font-size: 0.78rem;
+  line-height: 1.15;
+}
+
+.filter-option-box input {
+  width: auto;
+  flex: 0 0 auto;
+}
+
+.filter-option-box span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .favorites-shelf {
   display: grid;
   gap: 12px;
@@ -510,6 +669,17 @@ svg {
 
 .admin-card {
   min-height: auto;
+}
+
+.admin-card h3 a {
+  color: inherit;
+  text-decoration-color: rgba(8, 120, 138, 0.42);
+  text-underline-offset: 3px;
+}
+
+.admin-card.is-updated {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 4px rgba(8, 120, 138, 0.16), 0 12px 28px rgba(8, 120, 138, 0.18);
 }
 
 .recover-button,
@@ -693,6 +863,10 @@ svg {
     grid-template-columns: 1fr;
   }
 
+  .filter-selects {
+    grid-template-columns: 1fr;
+  }
+
   .hero {
     min-height: auto;
   }
@@ -713,6 +887,8 @@ svg {
 
   .submit-panel {
     position: static;
+    max-height: none;
+    overflow: visible;
   }
 }
 

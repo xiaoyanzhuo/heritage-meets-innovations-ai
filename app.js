@@ -61,6 +61,10 @@ const ideaWorkspace = document.querySelector("#ideaWorkspace");
 const ideaFullViewButton = document.querySelector("#ideaFullViewButton");
 const ideaWallOnlyButton = document.querySelector("#ideaWallOnlyButton");
 const submitterNameInput = form.elements.namedItem("submitterName");
+const ideaSuccess = document.querySelector("#ideaSuccess");
+const ideaReturnButton = document.querySelector("#ideaReturnButton");
+const ideaNewButton = document.querySelector("#ideaNewButton");
+const ideaWall = document.querySelector(".wall");
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -89,15 +93,27 @@ form.addEventListener("submit", async (event) => {
     activeFilter = "All";
     updateFilterButtons();
     render();
+    showIdeaSuccess();
   } catch (error) {
     window.alert(error.message);
   }
 });
 
+form.addEventListener("input", hideIdeaSuccess);
 ideaCancelEditButton.addEventListener("click", resetFormState);
 
 ideaFullViewButton.addEventListener("click", () => setIdeaView("full"));
 ideaWallOnlyButton.addEventListener("click", () => setIdeaView("wall"));
+ideaReturnButton.addEventListener("click", () => {
+  setIdeaView("wall");
+  ideaWall.scrollIntoView({ behavior: "smooth", block: "start" });
+});
+ideaNewButton.addEventListener("click", () => {
+  setIdeaView("full");
+  hideIdeaSuccess();
+  form.scrollIntoView({ behavior: "smooth", block: "start" });
+  form.elements.namedItem("title").focus();
+});
 
 filters.addEventListener("click", (event) => {
   const button = event.target.closest("[data-filter]");
@@ -194,6 +210,14 @@ function setIdeaView(view) {
   localStorage.setItem("aapi-ai-idea-wall-view", view);
 }
 
+function showIdeaSuccess() {
+  ideaSuccess.classList.remove("is-hidden");
+}
+
+function hideIdeaSuccess() {
+  ideaSuccess.classList.add("is-hidden");
+}
+
 function render() {
   grid.innerHTML = "";
   const visibleIdeas = ideas
@@ -203,6 +227,7 @@ function render() {
   visibleIdeas.forEach((idea) => {
     const card = template.content.firstElementChild.cloneNode(true);
     card.classList.toggle("is-pinned", favoriteIds.has(idea.id));
+    card.dataset.ideaId = idea.id;
     card.querySelector(".tag").textContent = idea.category;
     card.querySelector(".tag").dataset.category = idea.category;
     card.querySelector("h3").textContent = idea.title;
@@ -337,6 +362,31 @@ async function initialize() {
   setIdeaView(localStorage.getItem("aapi-ai-idea-wall-view") === "wall" ? "wall" : "full");
   ideas = await loadIdeas();
   render();
+  openPreviewTarget();
 }
 
 initialize();
+
+function openPreviewTarget() {
+  const params = new URLSearchParams(window.location.search);
+  const targetId = params.get("idea");
+  showAdminReturnLink(params);
+  if (!targetId) return;
+  activeFilter = "All";
+  updateFilterButtons();
+  setIdeaView("wall");
+  render();
+  window.requestAnimationFrame(() => {
+    const card = grid.querySelector(`[data-idea-id="${CSS.escape(targetId)}"]`);
+    if (!card) return;
+    card.classList.add("is-updated");
+    card.scrollIntoView({ behavior: "smooth", block: "center" });
+    card.focus({ preventScroll: true });
+    window.setTimeout(() => card.classList.remove("is-updated"), 2200);
+  });
+}
+
+function showAdminReturnLink(params) {
+  if (params.get("fromAdmin") !== "1" && !sessionStorage.getItem("aapin-admin-key")) return;
+  document.querySelector(".admin-return-link")?.classList.remove("is-hidden");
+}

@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parent
 DATA_DIR = ROOT / "data"
 UPLOAD_DIR = ROOT / "uploads"
 DB_PATH = Path(os.environ.get("AAPIN_DB_PATH", DATA_DIR / "aapin_live.db"))
-MAX_UPLOAD_BYTES = 8 * 1024 * 1024
+MAX_UPLOAD_BYTES = 5 * 1024 * 1024
 CLIENT_HEADER = "X-AAPIN-Client"
 ADMIN_HEADER = "X-AAPIN-Admin-Key"
 ADMIN_KEY = os.environ.get("AAPIN_ADMIN_KEY", "aapin-admin")
@@ -328,12 +328,15 @@ def normalize_showcase(payload: dict, existing: dict | None = None) -> dict:
         raise ValueError("Username or name is required.")
     if not display_name:
         display_name = legacy_author or submitter_name
+    origin_culture = clean_text(payload.get("originCulture"), existing.get("originCulture", ""))
+    if not origin_culture:
+        raise ValueError("Originated culture, country, or region is required.")
     return {
         "id": clean_text(payload.get("id"), existing.get("id") or str(uuid.uuid4())),
         "title": clean_text(payload.get("title"), existing.get("title", "")),
         "category": clean_text(payload.get("category"), existing.get("category", "Story")),
         "heritage": clean_text(payload.get("heritage"), existing.get("heritage", "Shared heritage")),
-        "originCulture": clean_text(payload.get("originCulture"), existing.get("originCulture", "Not specified")),
+        "originCulture": origin_culture,
         "author": display_name,
         "submitterName": submitter_name,
         "displayName": display_name,
@@ -443,7 +446,7 @@ def save_upload(field) -> str:
         shutil.copyfileobj(field.file, output)
     if target.stat().st_size > MAX_UPLOAD_BYTES:
         target.unlink(missing_ok=True)
-        raise ValueError("Image upload is too large. Please use an image under 8 MB.")
+        raise ValueError("Image upload is too large. Please use an image 5 MB or smaller.")
     return f"uploads/{target.name}"
 
 

@@ -113,6 +113,23 @@
   display: none;
 }
 
+.optional-field {
+  border: 1px solid rgba(16, 34, 74, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 253, 248, 0.72);
+  padding: 10px 12px;
+}
+
+.optional-field summary {
+  color: #26385b;
+  font-size: 0.92rem;
+  font-weight: 750;
+}
+
+.optional-field textarea {
+  margin-top: 10px;
+}
+
 .is-hidden {
   display: none !important;
 }
@@ -132,6 +149,12 @@
   font-size: 0.76rem;
   font-weight: 650;
   line-height: 1.3;
+}
+
+.legend-hint {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 650;
 }
 
 .identity-grid {
@@ -199,6 +222,11 @@
 .result-card.is-pinned {
   border-color: rgba(229, 154, 40, 0.9);
   box-shadow: inset 0 4px 0 var(--saffron), 0 12px 28px rgba(229, 154, 40, 0.16);
+}
+
+.result-card.is-updated {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 4px rgba(8, 120, 138, 0.16), 0 12px 28px rgba(8, 120, 138, 0.18);
 }
 
 .result-card__header {
@@ -331,6 +359,20 @@ details .source-copy {
 .result-card .delete-button {
   width: 38px;
   height: 38px;
+}
+
+.admin-card-return {
+  display: inline-flex;
+  align-items: center;
+  min-height: 38px;
+  border: 1px solid rgba(8, 120, 138, 0.28);
+  border-radius: 8px;
+  color: var(--teal);
+  background: rgba(8, 120, 138, 0.08);
+  padding: 8px 10px;
+  font-size: 0.78rem;
+  font-weight: 850;
+  text-decoration: none;
 }
 
 .edit-button {
