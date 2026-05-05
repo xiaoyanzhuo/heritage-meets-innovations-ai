@@ -1,6 +1,7 @@
 const FAVORITES_KEY = "aapi-ai-idea-wall-favorites";
 const CLIENT_KEY = "aapi-ai-contributor-id";
 const API_BASE = window.location.protocol === "file:" ? "" : "/api";
+const IDEA_PREVIEW_LIMIT = 300;
 
 const seedIdeas = [
   {
@@ -65,6 +66,13 @@ const ideaSuccess = document.querySelector("#ideaSuccess");
 const ideaReturnButton = document.querySelector("#ideaReturnButton");
 const ideaNewButton = document.querySelector("#ideaNewButton");
 const ideaWall = document.querySelector(".wall");
+const ideaViewer = document.querySelector("#ideaViewer");
+const ideaViewerCloseButton = document.querySelector("#ideaViewerCloseButton");
+const ideaViewerCategory = document.querySelector("#ideaViewerCategory");
+const ideaViewerTitle = document.querySelector("#ideaViewerTitle");
+const ideaViewerDescription = document.querySelector("#ideaViewerDescription");
+const ideaViewerAuthor = document.querySelector("#ideaViewerAuthor");
+const ideaViewerStage = document.querySelector("#ideaViewerStage");
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -113,6 +121,10 @@ ideaNewButton.addEventListener("click", () => {
   hideIdeaSuccess();
   form.scrollIntoView({ behavior: "smooth", block: "start" });
   form.elements.namedItem("title").focus();
+});
+ideaViewerCloseButton.addEventListener("click", closeIdeaViewer);
+ideaViewer.addEventListener("click", (event) => {
+  if (event.target === ideaViewer) closeIdeaViewer();
 });
 
 filters.addEventListener("click", (event) => {
@@ -246,7 +258,11 @@ function render() {
     card.querySelector(".tag").textContent = idea.category;
     card.querySelector(".tag").dataset.category = idea.category;
     card.querySelector("h3").textContent = idea.title;
-    card.querySelector(".idea-copy").textContent = idea.description;
+    const isTruncated = idea.description.length > IDEA_PREVIEW_LIMIT;
+    const ideaCopy = card.querySelector(".idea-copy");
+    ideaCopy.textContent = previewText(idea.description);
+    ideaCopy.classList.toggle("is-truncated", isTruncated);
+    if (isTruncated) ideaCopy.title = "Open the idea to view the full description.";
     card.querySelector(".author").textContent = idea.author;
     card.querySelector(".stage").textContent = idea.stage;
     const voteButton = card.querySelector(".vote-button");
@@ -265,6 +281,17 @@ function render() {
     deleteButton.classList.toggle("is-hidden", !idea.canEdit);
     editButton.addEventListener("click", () => startEdit(idea.id));
     deleteButton.addEventListener("click", () => deleteIdea(idea.id));
+    card.addEventListener("click", (event) => {
+      if (event.target.closest("button, a")) return;
+      openIdeaViewer(idea.id);
+    });
+    card.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      if (event.target.closest("button, a")) return;
+      event.preventDefault();
+      openIdeaViewer(idea.id);
+    });
+    card.tabIndex = 0;
 
     grid.append(card);
   });
@@ -272,6 +299,36 @@ function render() {
   emptyState.classList.toggle("is-visible", visibleIdeas.length === 0);
   updateStats();
   renderFavorites();
+}
+
+function previewText(text) {
+  const clean = text || "";
+  if (clean.length <= IDEA_PREVIEW_LIMIT) return clean;
+  return `${clean.slice(0, IDEA_PREVIEW_LIMIT).trimEnd()} >>`;
+}
+
+function openIdeaViewer(id) {
+  const idea = ideas.find((entry) => entry.id === id);
+  if (!idea) return;
+  ideaViewerCategory.textContent = idea.category;
+  ideaViewerCategory.dataset.category = idea.category;
+  ideaViewerTitle.textContent = idea.title;
+  ideaViewerDescription.textContent = idea.description;
+  ideaViewerAuthor.textContent = idea.author;
+  ideaViewerStage.textContent = idea.stage;
+  if (typeof ideaViewer.showModal === "function") {
+    ideaViewer.showModal();
+  } else {
+    ideaViewer.setAttribute("open", "");
+  }
+}
+
+function closeIdeaViewer() {
+  if (typeof ideaViewer.close === "function") {
+    ideaViewer.close();
+  } else {
+    ideaViewer.removeAttribute("open");
+  }
 }
 
 function startEdit(id) {

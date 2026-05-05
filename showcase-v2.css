@@ -332,6 +332,11 @@
   font-style: italic;
 }
 
+.ai-output.is-truncated {
+  max-height: 12.5rem;
+  overflow: hidden;
+}
+
 .secondary-action {
   min-height: 44px;
   border: 1px solid var(--line);

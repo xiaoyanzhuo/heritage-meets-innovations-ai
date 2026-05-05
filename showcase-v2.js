@@ -3,6 +3,7 @@ const CLIENT_KEY = "aapi-ai-contributor-id";
 const API_BASE = window.location.protocol === "file:" ? "" : "/api";
 const AI_CONNECTIONS = ["Translate", "Explain", "AI Image"];
 const MAX_IMAGE_UPLOAD_BYTES = 5 * 1024 * 1024;
+const GALLERY_TEXT_LIMIT = 300;
 const SHARE_TYPES = new Set(["No AI Please", "Needs AI Help", "AI-Assisted Result"]);
 const SHARE_LABELS = {
   "No AI Please": "No AI Please",
@@ -431,6 +432,12 @@ function normalizeConnections(connections) {
   return clean.length ? [...new Set(clean)] : ["Translate"];
 }
 
+function previewText(text) {
+  const clean = text || "";
+  if (clean.length <= GALLERY_TEXT_LIMIT) return clean;
+  return `${clean.slice(0, GALLERY_TEXT_LIMIT).trimEnd()} >>`;
+}
+
 function render() {
   grid.innerHTML = "";
   updateFilterControls();
@@ -467,8 +474,11 @@ function render() {
     if (isNoAi && imageSource) {
       output.remove();
     } else {
-      output.textContent = isNoAi ? "No-AI share: source preserved without AI transformation." : result.aiText;
+      const isTruncated = !isNoAi && result.aiText.length > GALLERY_TEXT_LIMIT;
+      output.textContent = isNoAi ? "No-AI share: source preserved without AI transformation." : previewText(result.aiText);
       output.classList.toggle("is-source-only", isNoAi);
+      output.classList.toggle("is-truncated", isTruncated);
+      if (isTruncated) output.title = "Open the submission to view the full AI text result.";
     }
 
     const reading = card.querySelector(".reading-output");
