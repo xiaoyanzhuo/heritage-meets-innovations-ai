@@ -311,6 +311,9 @@
   margin: 0;
   color: #34415d;
   line-height: 1.48;
+  overflow-wrap: anywhere;
+  tab-size: 2;
+  white-space: pre-wrap;
 }
 
 .reading-output {
