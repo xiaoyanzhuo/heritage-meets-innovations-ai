@@ -702,7 +702,7 @@ class Handler(BaseHTTPRequestHandler):
     def serve_static(self, path: str, head_only: bool = False) -> None:
         safe_path = posixpath.normpath(unquote(path)).lstrip("/")
         if safe_path in {"", "."}:
-            safe_path = "index.html"
+            safe_path = "heritage-showcase-v2.html"
         file_path = (ROOT / safe_path).resolve()
         if not str(file_path).startswith(str(ROOT)) or not file_path.is_file():
             self.send_error(HTTPStatus.NOT_FOUND)
