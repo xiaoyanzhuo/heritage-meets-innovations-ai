@@ -90,6 +90,7 @@ def init_db() -> None:
               owner_id TEXT NOT NULL DEFAULT '',
               deleted_at TEXT NOT NULL DEFAULT '',
               deleted_by TEXT NOT NULL DEFAULT '',
+              updated_at TEXT NOT NULL DEFAULT '',
               created_at TEXT NOT NULL
             );
 
@@ -133,6 +134,7 @@ def init_db() -> None:
         ensure_column(conn, "ideas", "display_name", "TEXT NOT NULL DEFAULT ''")
         ensure_column(conn, "ideas", "deleted_at", "TEXT NOT NULL DEFAULT ''")
         ensure_column(conn, "ideas", "deleted_by", "TEXT NOT NULL DEFAULT ''")
+        ensure_column(conn, "ideas", "updated_at", "TEXT NOT NULL DEFAULT ''")
         ensure_column(conn, "showcase", "owner_id", "TEXT NOT NULL DEFAULT ''")
         ensure_column(conn, "showcase", "submitter_name", "TEXT NOT NULL DEFAULT ''")
         ensure_column(conn, "showcase", "display_name", "TEXT NOT NULL DEFAULT ''")
@@ -174,6 +176,7 @@ def row_to_idea(row: sqlite3.Row, client_id: str = "", include_deleted: bool = F
         "votes": row["votes"],
         "pinned": bool(row["pinned"]),
         "canEdit": can_edit,
+        "updatedAt": row["updated_at"] if "updated_at" in row.keys() else "",
         "createdAt": row["created_at"],
     }
     if include_deleted:
@@ -266,6 +269,7 @@ def clean_bool(value, fallback: bool = False) -> bool:
 
 def normalize_idea(payload: dict, existing: dict | None = None) -> dict:
     existing = existing or {}
+    now = now_iso()
     submitter_name = clean_text(payload.get("submitterName"), existing.get("submitterName", ""))
     display_name = clean_text(payload.get("displayName"), existing.get("displayName", ""))
     legacy_author = clean_text(payload.get("author"), existing.get("author", ""))
@@ -289,7 +293,8 @@ def normalize_idea(payload: dict, existing: dict | None = None) -> dict:
         "ownerId": clean_text(payload.get("ownerId"), existing.get("ownerId", "")),
         "deletedAt": clean_text(payload.get("deletedAt"), existing.get("deletedAt", "")),
         "deletedBy": clean_text(payload.get("deletedBy"), existing.get("deletedBy", "")),
-        "createdAt": clean_text(payload.get("createdAt"), existing.get("createdAt") or now_iso()),
+        "updatedAt": clean_text(payload.get("updatedAt"), now if existing else ""),
+        "createdAt": clean_text(payload.get("createdAt"), existing.get("createdAt") or now),
     }
 
 
@@ -370,14 +375,14 @@ def upsert_idea(conn: sqlite3.Connection, payload: dict) -> dict:
     idea = normalize_idea(payload)
     conn.execute(
         """
-        INSERT INTO ideas (id, title, description, category, author, submitter_name, display_name, stage, votes, pinned, owner_id, deleted_at, deleted_by, created_at)
-        VALUES (:id, :title, :description, :category, :author, :submitterName, :displayName, :stage, :votes, :pinned, :ownerId, :deletedAt, :deletedBy, :createdAt)
+        INSERT INTO ideas (id, title, description, category, author, submitter_name, display_name, stage, votes, pinned, owner_id, deleted_at, deleted_by, updated_at, created_at)
+        VALUES (:id, :title, :description, :category, :author, :submitterName, :displayName, :stage, :votes, :pinned, :ownerId, :deletedAt, :deletedBy, :updatedAt, :createdAt)
         ON CONFLICT(id) DO UPDATE SET
           title=excluded.title, description=excluded.description, category=excluded.category,
           author=excluded.author, submitter_name=excluded.submitter_name,
           display_name=excluded.display_name, stage=excluded.stage, votes=excluded.votes,
           pinned=excluded.pinned, owner_id=excluded.owner_id, deleted_at=excluded.deleted_at,
-          deleted_by=excluded.deleted_by, created_at=excluded.created_at
+          deleted_by=excluded.deleted_by, updated_at=excluded.updated_at, created_at=excluded.created_at
         """,
         {**idea, "pinned": int(idea["pinned"])},
     )
@@ -612,7 +617,7 @@ class Handler(BaseHTTPRequestHandler):
             if not existing:
                 raise ValueError("Idea not found.")
             self.require_owner_or_admin(existing)
-            idea = upsert_idea(conn, {**existing, **payload, "id": item_id})
+            idea = upsert_idea(conn, {**existing, **payload, "id": item_id, "updatedAt": now_iso()})
         return idea
 
     def increment_idea(self, item_id: str) -> dict:

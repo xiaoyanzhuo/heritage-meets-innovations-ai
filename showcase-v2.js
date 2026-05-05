@@ -101,6 +101,7 @@ let activeFilters = {
   culture: ["All"],
   mode: ["All"]
 };
+let activeSort = "applause";
 let editingId = null;
 let favoriteIds = loadFavorites();
 let currentViewerImages = [];
@@ -115,6 +116,7 @@ const submissionCount = document.querySelector("#submissionCount");
 const resultCount = document.querySelector("#resultCount");
 const imageCount = document.querySelector("#imageCount");
 const filters = document.querySelector("#filters");
+const showcaseSortSelect = document.querySelector("#showcaseSortSelect");
 const exportButton = document.querySelector("#exportButton");
 const clearButton = document.querySelector("#clearButton");
 const submitLabel = document.querySelector("#submitLabel");
@@ -203,6 +205,10 @@ showcaseNewButton.addEventListener("click", () => {
   hideShowcaseSuccess();
   form.scrollIntoView({ behavior: "smooth", block: "start" });
   form.elements.namedItem("title").focus();
+});
+showcaseSortSelect.addEventListener("change", () => {
+  activeSort = showcaseSortSelect.value;
+  render();
 });
 viewerCloseButton.addEventListener("click", closeResultViewer);
 viewerPrevButton.addEventListener("click", () => showViewerImage(currentViewerIndex - 1));
@@ -443,7 +449,7 @@ function render() {
   updateFilterControls();
   const visibleResults = results
     .filter(matchesFilter)
-    .sort((a, b) => Number(favoriteIds.has(b.id)) - Number(favoriteIds.has(a.id)) || b.applause - a.applause || new Date(b.createdAt) - new Date(a.createdAt));
+    .sort(sortResults);
 
   visibleResults.forEach((result) => {
     const card = template.content.firstElementChild.cloneNode(true);
@@ -536,6 +542,16 @@ function matchesFilter(result) {
   return matchesType && matchesCulture && matchesMode;
 }
 
+function sortResults(a, b) {
+  if (activeSort === "updated") return getTime(b.updatedAt || b.createdAt) - getTime(a.updatedAt || a.createdAt) || b.applause - a.applause;
+  if (activeSort === "created") return getTime(b.createdAt) - getTime(a.createdAt) || b.applause - a.applause;
+  return b.applause - a.applause || getTime(b.updatedAt || b.createdAt) - getTime(a.updatedAt || a.createdAt);
+}
+
+function getTime(value) {
+  return value ? new Date(value).getTime() || 0 : 0;
+}
+
 async function applaudResult(id) {
   try {
     const updatedResult = await apiRequest(`/showcase/${id}/applause`, { method: "POST" });
@@ -577,11 +593,19 @@ function renderFavorites() {
   favoritesEmpty.classList.toggle("is-hidden", favorites.length > 0);
 
   favorites.forEach((result) => {
-    const chip = document.createElement("span");
+    const chip = document.createElement("button");
+    chip.type = "button";
     chip.className = "favorite-chip";
     chip.textContent = result.title;
+    chip.addEventListener("click", () => locateFavoriteResult(result.id));
     favoritesList.append(chip);
   });
+}
+
+function locateFavoriteResult(id) {
+  resetFilters();
+  render();
+  returnToUpdatedSubmission(id);
 }
 
 function getImageSources(result) {

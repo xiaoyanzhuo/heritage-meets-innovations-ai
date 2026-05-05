@@ -475,7 +475,7 @@ svg {
 
 .filter-selects {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   align-items: start;
   column-gap: 14px;
   row-gap: 10px;
@@ -611,6 +611,14 @@ svg {
   padding: 6px 10px;
   font-size: 0.84rem;
   font-weight: 800;
+  cursor: pointer;
+  text-align: left;
+}
+
+.favorite-chip:hover,
+.favorite-chip:focus-visible {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px rgba(8, 120, 138, 0.12);
 }
 
 .favorite-empty {

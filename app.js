@@ -249,7 +249,7 @@ function render() {
   grid.innerHTML = "";
   const visibleIdeas = ideas
     .filter((idea) => activeFilter === "All" || idea.category === activeFilter)
-    .sort((a, b) => Number(favoriteIds.has(b.id)) - Number(favoriteIds.has(a.id)) || b.votes - a.votes || new Date(b.createdAt) - new Date(a.createdAt));
+    .sort((a, b) => b.votes - a.votes || getTime(b.updatedAt || b.createdAt) - getTime(a.updatedAt || a.createdAt));
 
   visibleIdeas.forEach((idea) => {
     const card = template.content.firstElementChild.cloneNode(true);
@@ -299,6 +299,10 @@ function render() {
   emptyState.classList.toggle("is-visible", visibleIdeas.length === 0);
   updateStats();
   renderFavorites();
+}
+
+function getTime(value) {
+  return value ? new Date(value).getTime() || 0 : 0;
 }
 
 function previewText(text) {
@@ -401,10 +405,27 @@ function renderFavorites() {
   favoritesEmpty.classList.toggle("is-hidden", favorites.length > 0);
 
   favorites.forEach((idea) => {
-    const chip = document.createElement("span");
+    const chip = document.createElement("button");
+    chip.type = "button";
     chip.className = "favorite-chip";
     chip.textContent = idea.title;
+    chip.addEventListener("click", () => locateFavoriteIdea(idea.id));
     favoritesList.append(chip);
+  });
+}
+
+function locateFavoriteIdea(id) {
+  activeFilter = "All";
+  updateFilterButtons();
+  setIdeaView("wall");
+  render();
+  window.requestAnimationFrame(() => {
+    const card = grid.querySelector(`[data-idea-id="${CSS.escape(id)}"]`);
+    if (!card) return;
+    card.classList.add("is-updated");
+    card.scrollIntoView({ behavior: "smooth", block: "center" });
+    card.focus({ preventScroll: true });
+    window.setTimeout(() => card.classList.remove("is-updated"), 2200);
   });
 }
 
