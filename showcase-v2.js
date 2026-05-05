@@ -747,7 +747,7 @@ function validateImageUploads() {
   const oversizedFiles = [...input.files || []].filter((file) => file.size > MAX_IMAGE_UPLOAD_BYTES);
   if (!oversizedFiles.length) return true;
   const fileList = oversizedFiles.map((file) => file.name).join(", ");
-  window.alert(`Each image must be 5 MB or smaller. Please replace: ${fileList}`);
+  window.alert(`Please keep each image size within 5 MB. Please replace: ${fileList}`);
   input.value = "";
   renderCoverPicker();
   return false;
