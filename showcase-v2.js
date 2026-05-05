@@ -673,6 +673,8 @@ function startEdit(id) {
   const result = results.find((entry) => entry.id === id);
   if (!result) return;
 
+  setShowcaseView("full");
+  hideShowcaseSuccess();
   editingId = id;
   form.elements.namedItem("title").value = result.title;
   form.elements.namedItem("source").value = result.source;

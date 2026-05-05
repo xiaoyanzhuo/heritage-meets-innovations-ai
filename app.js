@@ -277,6 +277,8 @@ function render() {
 function startEdit(id) {
   const idea = ideas.find((entry) => entry.id === id);
   if (!idea || !idea.canEdit) return;
+  setIdeaView("full");
+  hideIdeaSuccess();
   editingId = id;
   form.elements.namedItem("title").value = idea.title;
   form.elements.namedItem("description").value = idea.description;
