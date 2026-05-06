@@ -1,4 +1,5 @@
 const FAVORITES_KEY = "aapi-ai-idea-wall-favorites";
+const VOTED_IDEAS_KEY = "aapi-ai-idea-wall-votes";
 const CLIENT_KEY = "aapi-ai-contributor-id";
 const API_BASE = window.location.protocol === "file:" ? "" : "/api";
 const IDEA_PREVIEW_LIMIT = 300;
@@ -43,6 +44,7 @@ let ideas = [];
 let activeFilter = "All";
 let editingId = null;
 let favoriteIds = loadFavorites();
+let votedIdeaIds = loadVotedIdeas();
 
 const form = document.querySelector("#ideaForm");
 const grid = document.querySelector("#ideaGrid");
@@ -227,6 +229,19 @@ function saveFavorites() {
   localStorage.setItem(FAVORITES_KEY, JSON.stringify([...favoriteIds]));
 }
 
+function loadVotedIdeas() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(VOTED_IDEAS_KEY));
+    return new Set(Array.isArray(parsed) ? parsed : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function saveVotedIdeas() {
+  localStorage.setItem(VOTED_IDEAS_KEY, JSON.stringify([...votedIdeaIds]));
+}
+
 function setIdeaView(view) {
   const isWallOnly = view === "wall";
   ideaWorkspace.classList.toggle("is-wall-only", isWallOnly);
@@ -360,11 +375,21 @@ function resetFormState() {
 }
 
 async function voteIdea(id) {
+  if (votedIdeaIds.has(id)) {
+    window.alert("You've already voted for this idea.");
+    return;
+  }
   try {
     const updatedIdea = await apiRequest(`/ideas/${id}/vote`, { method: "POST" });
     ideas = ideas.map((idea) => idea.id === id ? updatedIdea : idea);
+    votedIdeaIds.add(id);
+    saveVotedIdeas();
     render();
   } catch (error) {
+    if (error.message.includes("already voted")) {
+      votedIdeaIds.add(id);
+      saveVotedIdeas();
+    }
     window.alert(error.message);
   }
 }

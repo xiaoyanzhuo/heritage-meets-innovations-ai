@@ -1,4 +1,5 @@
 const FAVORITES_KEY = "aapi-ai-heritage-showcase-favorites";
+const VOTED_SHOWCASE_KEY = "aapi-ai-heritage-showcase-votes";
 const CLIENT_KEY = "aapi-ai-contributor-id";
 const API_BASE = window.location.protocol === "file:" ? "" : "/api";
 const AI_CONNECTIONS = ["Translate", "Explain", "AI Image"];
@@ -104,6 +105,7 @@ let activeFilters = {
 let activeSort = "applause";
 let editingId = null;
 let favoriteIds = loadFavorites();
+let votedShowcaseIds = loadVotedShowcase();
 let currentViewerImages = [];
 let currentViewerIndex = 0;
 let adminPreviewTargetId = "";
@@ -366,6 +368,19 @@ function saveFavorites() {
   localStorage.setItem(FAVORITES_KEY, JSON.stringify([...favoriteIds]));
 }
 
+function loadVotedShowcase() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(VOTED_SHOWCASE_KEY));
+    return new Set(Array.isArray(parsed) ? parsed : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function saveVotedShowcase() {
+  localStorage.setItem(VOTED_SHOWCASE_KEY, JSON.stringify([...votedShowcaseIds]));
+}
+
 function setShowcaseView(view) {
   const isGalleryOnly = view === "gallery";
   showcaseWorkspace.classList.toggle("is-gallery-only", isGalleryOnly);
@@ -477,14 +492,15 @@ function render() {
       image.classList.add("is-visible");
     }
 
-    if (isNoAi && imageSource) {
-      output.remove();
-    } else {
-      const isTruncated = !isNoAi && result.aiText.length > GALLERY_TEXT_LIMIT;
-      output.textContent = isNoAi ? "No-AI share: source preserved without AI transformation." : previewText(result.aiText);
-      output.classList.toggle("is-source-only", isNoAi);
-      output.classList.toggle("is-truncated", isTruncated);
-      if (isTruncated) output.title = "Open the submission to view the full AI text result.";
+    const galleryText = isNoAi ? result.source : result.aiText;
+    const isTruncated = galleryText.length > GALLERY_TEXT_LIMIT;
+    output.textContent = previewText(galleryText);
+    output.classList.toggle("is-source-only", isNoAi);
+    output.classList.toggle("is-truncated", isTruncated);
+    if (isTruncated) {
+      output.title = isNoAi
+        ? "Open the submission to view the full source sharing."
+        : "Open the submission to view the full AI text result.";
     }
 
     const reading = card.querySelector(".reading-output");
@@ -553,11 +569,21 @@ function getTime(value) {
 }
 
 async function applaudResult(id) {
+  if (votedShowcaseIds.has(id)) {
+    window.alert("You've already voted for this work.");
+    return;
+  }
   try {
     const updatedResult = await apiRequest(`/showcase/${id}/applause`, { method: "POST" });
     results = results.map((result) => result.id === id ? normalizeResults([updatedResult])[0] : result);
+    votedShowcaseIds.add(id);
+    saveVotedShowcase();
     render();
   } catch (error) {
+    if (error.message.includes("already voted")) {
+      votedShowcaseIds.add(id);
+      saveVotedShowcase();
+    }
     window.alert(error.message);
   }
 }

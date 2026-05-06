@@ -127,6 +127,20 @@ def init_db() -> None:
               deleted_by TEXT NOT NULL DEFAULT '',
               created_at TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS idea_votes (
+              idea_id TEXT NOT NULL,
+              client_id TEXT NOT NULL,
+              created_at TEXT NOT NULL,
+              PRIMARY KEY (idea_id, client_id)
+            );
+
+            CREATE TABLE IF NOT EXISTS showcase_votes (
+              showcase_id TEXT NOT NULL,
+              client_id TEXT NOT NULL,
+              created_at TEXT NOT NULL,
+              PRIMARY KEY (showcase_id, client_id)
+            );
             """
         )
         ensure_column(conn, "ideas", "owner_id", "TEXT NOT NULL DEFAULT ''")
@@ -621,12 +635,23 @@ class Handler(BaseHTTPRequestHandler):
         return idea
 
     def increment_idea(self, item_id: str) -> dict:
+        client_id = self.client_id()
+        if not client_id:
+            raise ValueError("A browser session is required to vote.")
         with db() as conn:
-            conn.execute("UPDATE ideas SET votes = votes + 1 WHERE id = ?", (item_id,))
             row = conn.execute("SELECT * FROM ideas WHERE id = ? AND deleted_at = ''", (item_id,)).fetchone()
             if not row:
                 raise ValueError("Idea not found.")
-            return row_to_idea(row, self.client_id())
+            try:
+                conn.execute(
+                    "INSERT INTO idea_votes (idea_id, client_id, created_at) VALUES (?, ?, ?)",
+                    (item_id, client_id, now_iso()),
+                )
+            except sqlite3.IntegrityError:
+                raise ValueError("You've already voted for this idea.")
+            conn.execute("UPDATE ideas SET votes = votes + 1 WHERE id = ?", (item_id,))
+            row = conn.execute("SELECT * FROM ideas WHERE id = ? AND deleted_at = ''", (item_id,)).fetchone()
+            return row_to_idea(row, client_id)
 
     def create_showcase(self) -> dict:
         payload = self.parse_multipart_or_json()
@@ -646,17 +671,32 @@ class Handler(BaseHTTPRequestHandler):
         return item
 
     def increment_showcase(self, item_id: str) -> dict:
+        client_id = self.client_id()
+        if not client_id:
+            raise ValueError("A browser session is required to vote.")
         with db() as conn:
-            conn.execute("UPDATE showcase SET applause = applause + 1 WHERE id = ?", (item_id,))
             row = conn.execute("SELECT * FROM showcase WHERE id = ? AND deleted_at = ''", (item_id,)).fetchone()
             if not row:
                 raise ValueError("Showcase submission not found.")
-            return row_to_showcase(row, self.client_id())
+            try:
+                conn.execute(
+                    "INSERT INTO showcase_votes (showcase_id, client_id, created_at) VALUES (?, ?, ?)",
+                    (item_id, client_id, now_iso()),
+                )
+            except sqlite3.IntegrityError:
+                raise ValueError("You've already voted for this work.")
+            conn.execute("UPDATE showcase SET applause = applause + 1 WHERE id = ?", (item_id,))
+            row = conn.execute("SELECT * FROM showcase WHERE id = ? AND deleted_at = ''", (item_id,)).fetchone()
+            return row_to_showcase(row, client_id)
 
     def reset_table(self, table: str, seed_path: Path, upsert) -> list[dict]:
         self.require_admin()
         with db() as conn:
             conn.execute(f"DELETE FROM {table}")
+            if table == "ideas":
+                conn.execute("DELETE FROM idea_votes")
+            elif table == "showcase":
+                conn.execute("DELETE FROM showcase_votes")
             rows = json.loads(seed_path.read_text(encoding="utf-8"))
             for row in rows:
                 upsert(conn, row)
